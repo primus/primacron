@@ -1,0 +1,26 @@
+{
+  "name": "scalar",
+  "version": "0.0.0",
+  "description": "Scalable API wrapper for Engine.IO",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/observing/scalar.git"
+  },
+  "keywords": [
+    "Engine.IO",
+    "Real-time",
+    "scaling"
+  ],
+  "author": "Arnout Kazemier <arnout@observe.it>",
+  "license": "Closed Source",
+  "private": true,
+  "dependencies": {
+    "routable": "0.0.1",
+    "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
+    "request": "~2.21.0"
+  }
+}
