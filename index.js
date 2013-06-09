@@ -184,7 +184,7 @@ Scaler.prototype.incoming = function incoming(req, res) {
   req.once('end', function end() {
     var data;
 
-    try { data = JSON.parse(buff); }
+    try { data = scaler.decode(buff); }
     catch (e) {
       scaler.end('broken', res);
       return scaler.emit('error::invalid', buff);
