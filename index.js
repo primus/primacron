@@ -108,9 +108,7 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
   //
   // Well, fuck it, keeel it, with fire!
   //
-  res.statusCode = 400;
-  res.setHeader('Content-Type', 'application/json');
-  res.end(this.response('bad request'));
+  this.end('bad request', res);
 };
 
 /**
@@ -174,6 +172,46 @@ Scaler.prototype.disconnect = function disconnect(account, session, id) {
  * @api private
  */
 Scaler.prototype.incoming = function incoming(req, res) {
+  var scaler = this
+    , buff = '';
+
+  //
+  // Receive the data from the socket. the setEncoding ensures that unicode
+  // chars are correctly buffered and parsed before the `data` event is emitted.
+  //
+  res.setEncoding('utf8');
+  req.on('data', function data(chunk) { buff += chunk; });
+  req.once('end', function end() {
+    var data;
+
+    try { data = JSON.parse(buff); }
+    catch (e) {
+      scaler.end('broken', res);
+      return scaler.emit('error::invalid', buff);
+    }
+
+    if (
+        typeof data !== 'object'                // Message should be an object
+      || Array.isArray(data)                    // Not an array..
+      || !('message' in data && 'id' in data)   // And have the required fields
+    ) {
+      scaler.end('invalid', res);
+      return scaler.emit('error::invalid', buff);
+    }
+
+    //
+    // Try to find the connected socket on our server.
+    //
+    if (!(data.id in scaler.engine.clients)) {
+      return scaler.end('unkown socket', res);
+    }
+
+    //
+    // Write the message to the client.
+    //
+    scaler.end('ending', res);
+    scaler.engine.clients[data.id].emit('scaler', data.message);
+  });
   return this;
 };
 
@@ -276,11 +314,21 @@ Scaler.prototype.connection = function connection(socket) {
  * Return a default response for the given request.
  *
  * @param {String} type The name of the response we should send.
+ * @param {Response} res HTTP response object
  * @returns {Buffer} Pre compiled response buffer.
  * @api private
  */
-Scaler.prototype.response = function response(type) {
-  return Scaler.prototype.response[type] || Scaler.prototype.response['bad request'];
+Scaler.prototype.end = function end(type, res) {
+  var compiled = Scaler.prototype.end
+    , msg = compiled[type] || compiled['bad request'];
+
+  if (!res) return msg;
+
+  res.statusCode = msg.json.status || 400;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(msg);
+
+  return msg;
 };
 
 //
@@ -308,7 +356,8 @@ Scaler.prototype.response = function response(type) {
     description: 'Sending the message to the socket'
   }
 ].forEach(function precompile(document) {
-  Scaler.prototype.response[document.type] = new Buffer(JSON.stringify(document));
+  Scaler.prototype.end[document.type] = new Buffer(JSON.stringify(document));
+  Scaler.prototype.end[document.type].json = document;
 });
 
 /**
