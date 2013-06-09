@@ -29,7 +29,7 @@ The following error events are emitted:
     indicate database failure.
   </dd>
 
-  <dd>error::json</dt>
+  <dt>error::json</dt>
   <dd><strong>message</strong></dd>
   <dd>
     We failed to parse the received message by our decoder. This shouldn't
@@ -37,14 +37,14 @@ The following error events are emitted:
     server or to find back doors. This should be seen a critical error.
   </dd>
 
-  <dd>error::invalid</dd>
+  <dt>error::invalid</dt>
   <dd><strong>message</strong></dd>
   <dd>
     We received a JSON document, but it wasn't an Object.. Someone is tyring to
     do fishy things with the server and action should be taken.. Cause as above.
   </dd>
 
-  <dd>error::validation</dd>
+  <dt>error::validation</dt>
   <dd><strong>event, error</strong></dd>
   <dd>
     The received message event was invalid.
