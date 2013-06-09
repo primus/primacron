@@ -5,20 +5,20 @@ var Engine = require('engine.io').Server
   , Route = require('routable');
 
 /**
- * Create a new Scalar instance.
+ * Create a new Scaler instance.
  *
  * @constructor
  * @param {Redis} redis A Redis client.
- * @param {Object} options Scalar options.
+ * @param {Object} options Scaler options.
  * @api public
  */
-function Scalar(redis, options) {
+function Scaler(redis, options) {
   options = options || {};
 
   //
   // The HTTP routes that we should be listening on.
   //
-  this.broadcast = new Route(options.broadcast || '/scalar/broadcast');
+  this.broadcast = new Route(options.broadcast || '/scaler/broadcast');
   this.endpoint = new Route(options.endpoint || '/stream/');
 
   // The redis client we need to keep connection state.
@@ -28,7 +28,7 @@ function Scalar(redis, options) {
   this.service = options.service || false;
 
   // The namespace for the keys that are stored in redis.
-  this.namespace = options.namespace || 'scalar';
+  this.namespace = options.namespace || 'scaler';
 
   // How long do we maintain stake from a single user.
   this.timeout = options.timeout || 60 * 15;
@@ -54,15 +54,15 @@ function Scalar(redis, options) {
 }
 
 //
-// The scalar inherits from the EventEmitter so we can savely emit events
+// The scaler inherits from the EventEmitter so we can savely emit events
 // without creating tail recursion.
 //
-Scalar.prototype.__proto__ = require('events').EventEmitter.prototype;
+Scaler.prototype.__proto__ = require('events').EventEmitter.prototype;
 
 //
 // Because we are to lazy to combine address + port every single time.
 //
-Object.defineProperty(Scalar.prototype, 'interface', {
+Object.defineProperty(Scaler.prototype, 'interface', {
   get: function get() {
     return this.address +':'+ this.port;
   }
@@ -77,7 +77,7 @@ Object.defineProperty(Scalar.prototype, 'interface', {
  * @param {Buffer} head HTTP head buffer.
  * @api private
  */
-Scalar.prototype.intercept = function intercept(websocket, req, res, head) {
+Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
   if (this.engine && this.endpoint.test(req.url)) {
     if (websocket) return this.engine.handleUpgrade(req, res, head);
     return this.engine.handleRequest(req, res);
@@ -119,7 +119,7 @@ Scalar.prototype.intercept = function intercept(websocket, req, res, head) {
  * @param {String} port The port number
  * @api public
  */
-Scalar.prototype.network = function network(address, port) {
+Scaler.prototype.network = function network(address, port) {
   if (address) this.address = address;
   if (port) this.port = port;
 
@@ -134,13 +134,13 @@ Scalar.prototype.network = function network(address, port) {
  * @param {String} id Connection id
  * @api private
  */
-Scalar.prototype.connect = function connect(account, session, id) {
+Scaler.prototype.connect = function connect(account, session, id) {
   var key = this.namespace +'::'+ account +'::'+ session
     , value = this.interface +'@'+ id
-    , scalar = this;
+    , scaler = this;
 
   this.redis.setx(key, this.timeout, value, function setx(err) {
-    if (err) return scalar.emit('error::connect', key, id);
+    if (err) return scaler.emit('error::connect', key, id);
   });
 
   return this;
@@ -153,12 +153,12 @@ Scalar.prototype.connect = function connect(account, session, id) {
  * @param {String} session Session id.
  * @param {String} id Connection id
  */
-Scalar.prototype.disconnect = function disconnect(account, session, id) {
+Scaler.prototype.disconnect = function disconnect(account, session, id) {
   var key = this.namespace +'::'+ account +'::'+ session
-    , scalar = this;
+    , scaler = this;
 
   this.redis.del(key, function del(err) {
-    if (err) return scalar.emit('error::disconnect', key, id);
+    if (err) return scaler.emit('error::disconnect', key, id);
   });
 
   return this;
@@ -171,7 +171,7 @@ Scalar.prototype.disconnect = function disconnect(account, session, id) {
  * @param {Respone} res
  * @api private
  */
-Scalar.prototype.incoming = function incoming(req, res) {
+Scaler.prototype.incoming = function incoming(req, res) {
   return this;
 };
 
@@ -181,7 +181,7 @@ Scalar.prototype.incoming = function incoming(req, res) {
  * @param {Socket} socket Engine.io socket
  * @api private
  */
-Scalar.prototype.connection = function connection(socket) {
+Scaler.prototype.connection = function connection(socket) {
   var session = socket.request.query.session
     , account = socket.request.query.account
     , id = socket.id;
@@ -198,8 +198,8 @@ Scalar.prototype.connection = function connection(socket) {
  * @returns {Buffer} Pre compiled response buffer.
  * @api private
  */
-Scalar.prototype.response = function response(type) {
-  return Scalar.prototype.response[type] || Scalar.prototype.response['bad request'];
+Scaler.prototype.response = function response(type) {
+  return Scaler.prototype.response[type] || Scaler.prototype.response['bad request'];
 };
 
 //
@@ -227,15 +227,15 @@ Scalar.prototype.response = function response(type) {
     description: 'Sending the message to the socket'
   }
 ].forEach(function precompile(document) {
-  Scalar.prototype.response[document.type] = new Buffer(JSON.stringify(document));
+  Scaler.prototype.response[document.type] = new Buffer(JSON.stringify(document));
 });
 
 /**
- * Destroy the scalar server and clean up all it's references.
+ * Destroy the scaler server and clean up all it's references.
  *
  * @api public
  */
-Scalar.prototype.destroy = function destroy(fn) {
+Scaler.prototype.destroy = function destroy(fn) {
   this.server.close(fn);
 
   this.server.removeAllListeners('request');
@@ -251,7 +251,7 @@ Scalar.prototype.destroy = function destroy(fn) {
  *
  * @api public
  */
-Scalar.prototype.listen = function listen() {
+Scaler.prototype.listen = function listen() {
   var args = Array.prototype.slice.call(arguments, 0)
     , port = args[0];
 

@@ -1,5 +1,5 @@
 {
-  "name": "scalar",
+  "name": "scaler",
   "version": "0.0.0",
   "description": "Scalable API wrapper for Engine.IO",
   "main": "index.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/observing/scalar.git"
+    "url": "git://github.com/observing/scaler.git"
   },
   "keywords": [
     "Engine.IO",
