@@ -1,6 +1,7 @@
 'use strict';
 
 var Engine = require('engine.io').Server
+  , Socket = require('engine.io').Socket
   , request = require('request')
   , Route = require('routable');
 
@@ -140,7 +141,7 @@ Scaler.prototype.connect = function connect(account, session, id) {
     , scaler = this;
 
   this.redis.setx(key, this.timeout, value, function setx(err) {
-    if (err) return scaler.emit('error::connect', key, id);
+    if (err) return scaler.emit('error::connect', key, value);
   });
 
   return this;
@@ -155,10 +156,11 @@ Scaler.prototype.connect = function connect(account, session, id) {
  */
 Scaler.prototype.disconnect = function disconnect(account, session, id) {
   var key = this.namespace +'::'+ account +'::'+ session
+    , value = this.interface +'@'+ id
     , scaler = this;
 
   this.redis.del(key, function del(err) {
-    if (err) return scaler.emit('error::disconnect', key, id);
+    if (err) return scaler.emit('error::disconnect', key, value);
   });
 
   return this;
@@ -176,6 +178,35 @@ Scaler.prototype.incoming = function incoming(req, res) {
 };
 
 /**
+ * Require validation for every single message that passes in our message
+ * system.
+ *
+ * @param {String} event The name of the event that we need to validate.
+ * @param {Function} validator The validation function.
+ * @api public
+ */
+Scaler.prototype.validate = function validate(event, validator) {
+  var scaler = this;
+
+  this.on('validate::', function validating() {
+    var data = Array.prototype.slice.call(arguments, 0);
+
+    data.push(function callback(err, ok) {
+      if (err) return scaler.emit('error::validation', event, err);
+      if (!ok) return scaler.emit('error::validation', event, new Error('Invalid'));
+
+      //
+      // Emit the event as it's validated.
+      //
+      data.unshift('stream::'+ event);
+      scaler.emit.apply(scaler, data);
+    });
+  });
+
+  return this;
+};
+
+/**
  * A new Engine.IO request has been received.
  *
  * @param {Socket} socket Engine.io socket
@@ -184,10 +215,60 @@ Scaler.prototype.incoming = function incoming(req, res) {
 Scaler.prototype.connection = function connection(socket) {
   var session = socket.request.query.session
     , account = socket.request.query.account
-    , id = socket.id;
+    , id = socket.id
+    , scaler = this;
 
-  this.connect(account, session, id, function connect(err) {
+  //
+  // Create a simple user packet that contains all information about this
+  // connection
+  //
+  var user = Object.create(null);
 
+  user.session = session;
+  user.account = account;
+  user.id = id;
+
+  scaler.connect(account, session, id);
+
+  //
+  // Parse messages.
+  //
+  socket.on('message', function preparser(message) {
+    var data;
+
+    try { data = scaler.decode(message); }
+    catch (e) { return scaler.emit('error::json', message); }
+
+    //
+    // The received data should be either be an Object or Array, JSON does
+    // support strings and numbers but we don't want those :)
+    //
+    if ('object' !== typeof data) return scaler.emit('error::invalid', message);
+
+    //
+    // Check if the message was formatted as an event, if it is we need to
+    // prefix it with `stream:` to namespace the event and prevent collitions
+    // with other internal events. And this also ensures that we will not
+    // override existing Engine.IO events and cause loops when an attacker
+    // emits an `message` event.
+    //
+    if (data && 'object' === typeof data && 'event' in data) {
+      data.args.unshift('validate::'+ data.event);
+      if (!scaler.emit.apply(scaler, data.args)) {
+        scaler.emit('error::validation', data.event, new Error('No validator'));
+      }
+    } else if (!scaler.emit('validate::message', data || message)) {
+      scaler.emit('error::validation', data.event, new Error('No validator'));
+    }
+  });
+
+  //
+  // Clean up the socket connection. Remove all listeners.
+  //
+  socket.once('close', function disconnect() {
+    scaler.disconnect(account, session, id);
+    socket.removeAllListeners();
+    user = null;
   });
 };
 
@@ -276,3 +357,8 @@ Scaler.prototype.listen = function listen() {
 
   return this;
 };
+
+//
+// Expose the module's interface.
+//
+module.exports = Scaler;
