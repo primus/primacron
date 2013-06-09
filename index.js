@@ -165,6 +165,68 @@ Scaler.prototype.disconnect = function disconnect(account, session, id) {
 };
 
 /**
+ * Find a server for a given session id.
+ *
+ * @param {String} account Observe.it account id.
+ * @param {String} session Session id of the user.
+ * @param {Function} fn Callback
+ * @api private
+ */
+Scaler.prototype.find = function find(account, session, fn) {
+  var key = this.namespace +'::'+ account +'::'+ session;
+
+  this.redis.get(key, function parse(err, data) {
+    if (err) return fn(err);
+
+    //
+    // The format of the response is <serverhost:port>@<socket id>, just split it.
+    //
+    data = data.split('@');
+    fn(undefined, data[0], data[1]);
+  });
+
+  return this;
+};
+
+/**
+ * Send a message to the given id.
+ *
+ * @param {String} account Observe.it account id.
+ * @param {String} session Session id of the user.
+ * @param {String} message Message
+ * @param {Function} fn Callback
+ * @api public
+ */
+Scaler.prototype.broadcast = function broadcast(account, session, message, fn) {
+  this.find(account, session, function found(err, server, id) {
+    if (err || !server) return fn(err || new Error('Unknown session id '+ session));
+
+    request({
+      uri: 'http://'+ server + exports.endpoint,
+      method: 'PUT',
+      json: {
+        id: id,           // The id of the socket that should receive the data.
+        message: message  // The actual message.
+      }
+    }, function requested(err, response, body) {
+      var status = response.statusCode;
+
+      if (err || status !== 200) {
+        return fn(err || new Error('Invalid status code ('+ status +') returned'));
+      }
+
+      //
+      // We only have successfully send the message when we received
+      // a statusCode 200 from the targetted server.
+      //
+      fn(undefined, body);
+    });
+  });
+
+  return this;
+};
+
+/**
  * An other server wants to send something one of our connected sockets.
  *
  * @param {Request} req
