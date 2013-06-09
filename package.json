@@ -4,7 +4,7 @@
   "description": "Scalable API wrapper for Engine.IO",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "NODE_ENV=testing ./node_modules/.bin/mocha $(find test -name '*.test.js')"
   },
   "repository": {
     "type": "git",
@@ -19,8 +19,13 @@
   "license": "Closed Source",
   "private": true,
   "dependencies": {
-    "routable": "0.0.1",
+    "routable": "0.0.x",
     "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
-    "request": "~2.21.0"
+    "request": "2.21.x"
+  },
+  "devDependencies": {
+    "mocha": "1.10.x",
+    "chai": "1.6.x",
+    "pre-commit": "0.0.3"
   }
 }

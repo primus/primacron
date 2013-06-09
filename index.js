@@ -176,7 +176,7 @@ Scaler.prototype.find = function find(account, session, fn) {
   var key = this.namespace +'::'+ account +'::'+ session;
 
   this.redis.get(key, function parse(err, data) {
-    if (err) return fn(err);
+    if (err || !data) return fn(err, data);
 
     //
     // The format of the response is <serverhost:port>@<socket id>, just split it.
