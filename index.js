@@ -21,10 +21,23 @@ function Scalar(redis, options) {
   this.broadcast = new Route(options.broadcast || '/scalar/broadcast');
   this.endpoint = new Route(options.endpoint || '/stream/');
 
+  // The redis client we need to keep connection state.
   this.redis = redis || require('redis').createClient();
+
+  // The root domain of the service, will be used for redirects.
   this.service = options.service || false;
+
+  // The namespace for the keys that are stored in redis.
   this.namespace = options.namespace || 'scalar';
+
+  // How long do we maintain stake from a single user.
   this.timeout = options.timeout || 60 * 15;
+
+  // The network address this server is approachable on for internal HTTP requests.
+  this.address = options.address || 'localhost';
+
+  // The port number that we should use to connect with this server.
+  this.port = options.port || null;
 
   //
   // Allow custom encoders and decoders, we default to JSON.parse so it should
@@ -38,8 +51,6 @@ function Scalar(redis, options) {
   //
   this.server = null;         // HTTP server instance.
   this.engine = null;         // Engine.IO server.
-  this.address = 'localhost'; // Network address were this server is approachable on.
-  this.port = null;           // Port number.
 }
 
 //
