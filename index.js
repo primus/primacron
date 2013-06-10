@@ -65,7 +65,7 @@ Scaler.prototype.__proto__ = require('events').EventEmitter.prototype;
 //
 Object.defineProperty(Scaler.prototype, 'interface', {
   get: function get() {
-    return this.address +':'+ this.port;
+    return [this.address, this.port].filter(Boolean).join(':');
   }
 });
 
