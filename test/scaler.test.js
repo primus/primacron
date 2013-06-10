@@ -34,8 +34,41 @@ describe('scaler', function () {
   });
 
   describe('#network', function () {
-    it('sets the address');
-    it('sets the port');
+    it('sets the address', function () {
+      var scale = new Scaler();
+
+      expect(scale.address).to.equal('localhost');
+      expect(scale.port).to.equal(null);
+
+      scale.network('127.0.0.1');
+
+      expect(scale.address).to.equal('127.0.0.1');
+      expect(scale.port).to.equal(null);
+    });
+
+    it('sets the port', function () {
+      var scale = new Scaler();
+
+      expect(scale.address).to.equal('localhost');
+      expect(scale.port).to.equal(null);
+
+      scale.network('127.0.0.1', 2456);
+
+      expect(scale.address).to.equal('127.0.0.1');
+      expect(scale.port).to.equal(2456);
+    });
+
+    it('updates the values for the interface property', function () {
+      var scale = new Scaler();
+
+      expect(scale.interface).to.equal('localhost');
+
+      scale.network('127.0.0.1');
+      expect(scale.interface).to.equal('127.0.0.1');
+
+      scale.network('internal.dns', 1337);
+      expect(scale.interface).to.equal('internal.dns:1337');
+    });
   });
 
   describe('#connect', function () {
@@ -171,6 +204,7 @@ describe('scaler', function () {
 
   describe('#listen', function () {
     it('starts the Engine.IO server');
+    it('saves the port number');
     it('attaches event listeners');
     it('proxies the events to the server#listen method');
   });
