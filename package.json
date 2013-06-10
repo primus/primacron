@@ -26,6 +26,7 @@
   "devDependencies": {
     "mocha": "1.10.x",
     "chai": "1.6.x",
-    "pre-commit": "0.0.3"
+    "pre-commit": "0.0.3",
+    "redis": "~0.8.3"
   }
 }
