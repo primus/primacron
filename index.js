@@ -288,19 +288,29 @@ Scaler.prototype.incoming = function incoming(req, res) {
 Scaler.prototype.validate = function validate(event, validator) {
   var scaler = this;
 
-  this.on('validate::', function validating() {
+  this.on('validate::'+ event, function validating() {
     var data = Array.prototype.slice.call(arguments, 0);
 
-    data.push(function callback(err, ok) {
+    data.push(function callback(err, ok, tranformed) {
       if (err) return scaler.emit('error::validation', event, err);
-      if (!ok) return scaler.emit('error::validation', event, new Error('Invalid'));
 
       //
-      // Emit the event as it's validated.
+      // Only emit an validation error when ok is set to false.
+      //
+      if (ok === false) {
+        return scaler.emit('error::validation', event, new Error('Failed to validate the data'));
+      }
+
+      //
+      // Emit the event as it's validated, but remove the old callback first
       //
       data.unshift('stream::'+ event);
+      data.pop();
+
       scaler.emit.apply(scaler, data);
     });
+
+    validator.apply(this, data);
   });
 
   return this;
@@ -428,11 +438,15 @@ Scaler.prototype.end = function end(type, res) {
  * @api public
  */
 Scaler.prototype.destroy = function destroy(fn) {
-  this.server.close(fn);
+  var scaler = this;
 
   this.server.removeAllListeners('request');
   this.server.removeAllListeners('upgrade');
   this.engine.removeAllListeners('connection');
+  this.server.close(function closed() {
+    scaler.redis.end();
+    (fn || function noop(){}).apply(this, arguments);
+  });
 
   return this;
 };
