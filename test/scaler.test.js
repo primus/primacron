@@ -1,7 +1,8 @@
 describe('scaler', function () {
   'use strict';
 
-  var redis = require('redis')
+  var request = require('request')
+    , redis = require('redis')
     , Scaler = require('../')
     , chai = require('chai')
     , expect = chai.expect
@@ -90,16 +91,16 @@ describe('scaler', function () {
       expect(scale.port).to.equal(2456);
     });
 
-    it('updates the values for the interface property', function () {
+    it('updates the values for the uri property', function () {
       var scale = new Scaler();
 
-      expect(scale.interface).to.equal('localhost');
+      expect(scale.uri).to.equal('http://localhost');
 
       scale.network('127.0.0.1');
-      expect(scale.interface).to.equal('127.0.0.1');
+      expect(scale.uri).to.equal('http://127.0.0.1');
 
       scale.network('internal.dns', 1337);
-      expect(scale.interface).to.equal('internal.dns:1337');
+      expect(scale.uri).to.equal('http://internal.dns:1337');
     });
   });
 
@@ -218,11 +219,98 @@ describe('scaler', function () {
 
   describe('#incoming', function () {
     it('receives unicode correctly');
-    it('emits error::invalid on parse error');
-    it('writes a broken response on parse error');
-    it('emits error::invalid on invalid objects');
-    it('writes a invalid response on invalid objects');
-    it('returns a 404 when the socket cannot be found');
+
+    it('emits error::invalid on parse error', function (done) {
+      server.once('error::invalid', function (err, message) {
+        expect(err).to.be.instanceOf(Error);
+
+        expect(message).to.be.a('string');
+        expect(message).to.equal('{json:foo}');
+
+        done();
+      });
+
+      request({
+        uri: server.uri + server.broadcast,
+        body: '{json:foo}',
+        method: 'put'
+      }, function (err, res, body) {
+        if (err) return done(err);
+        body = JSON.parse(body);
+
+        expect(res.statusCode).to.equal(400);
+        expect(body).to.be.a('object');
+        expect(body.status).to.equal(res.statusCode);
+        expect(body.description).to.include('incorrect');
+      });
+    });
+
+    it('emits error::invalid on invalid objects', function (done) {
+      (function iterator(items) {
+        var complete = items.length
+          , completed = 0;
+
+        function next() {
+          var item = items.pop();
+
+          server.once('error::invalid', function (err, message) {
+            expect(err).to.be.instanceOf(Error);
+
+            expect(message).to.be.a('string');
+            expect(message).to.equal(JSON.stringify(item.json));
+
+            if (++completed === complete) return done();
+            next();
+          });
+
+          request({
+            uri: server.uri + server.broadcast,
+            json: item.json,
+            method: 'PUT'
+          }, function requested(err, res, body) {
+            if (err) return done(err);
+
+            expect(res.statusCode).to.equal(400);
+            expect(body).to.be.a('object');
+            expect(body.status).to.equal(res.statusCode);
+            expect(body.description).to.include('invalid');
+          });
+        }
+
+        next();
+      })([
+        { json: 1 },
+        { json: 'string' },
+        { json: ['array', 1] },
+        { json: { message: 'message only' }},
+        { json: { id: 'id only' }}
+      ]);
+    });
+
+    it('returns a 404 when the socket cannot be found', function (done) {
+      server.once('error::invalid', function (err, message) {
+        throw new Error('This message is not fucking invalid, you fucked up');
+      });
+
+      request({
+        uri: server.uri + server.broadcast,
+        json: {
+          id: 'foobar',
+          message: 'hi'
+        },
+        method: 'put'
+      }, function (err, res, body) {
+        if (err) return done(err);
+
+        expect(res.statusCode).to.equal(404);
+        expect(body).to.be.a('object');
+        expect(body.status).to.equal(res.statusCode);
+        expect(body.description).to.include('socket was not found');
+
+        done();
+      });
+    });
+
     it('returns a 200 sending when we write to the socket');
   });
 

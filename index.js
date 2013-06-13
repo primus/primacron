@@ -63,11 +63,16 @@ Scaler.prototype.__proto__ = require('events').EventEmitter.prototype;
 //
 // Because we are to lazy to combine address + port every single time.
 //
-Object.defineProperty(Scaler.prototype, 'interface', {
+Object.defineProperty(Scaler.prototype, 'uri', {
   get: function get() {
-    return [this.address, this.port].filter(Boolean).join(':');
+    return 'http://'+ [this.address, this.port].filter(Boolean).join(':');
   }
 });
+
+//
+// Expose the version number.
+//
+Scaler.prototype.version = require('./package.json').version;
 
 /**
  * Intercept HTTP requests and handle them accordingly.
@@ -90,7 +95,12 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
     return res.end();
   }
 
-  if ('put' === req.method && this.broadcast.test(req.url)) {
+  //
+  // Add some identifying headers
+  //
+  res.setHeader('X-Powered-By', 'Scaler/v'+ this.version);
+
+  if ('put' === (req.method || '').toLowerCase() && this.broadcast.test(req.url)) {
     return this.incoming(req, res);
   }
 
@@ -136,7 +146,7 @@ Scaler.prototype.network = function network(address, port) {
  */
 Scaler.prototype.connect = function connect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
-    , value = this.interface +'@'+ id
+    , value = this.uri +'@'+ id
     , scaler = this;
 
   this.redis.setex(key, this.timeout, value, function setx(err) {
@@ -157,7 +167,7 @@ Scaler.prototype.connect = function connect(account, session, id, fn) {
  */
 Scaler.prototype.disconnect = function disconnect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
-    , value = this.interface +'@'+ id
+    , value = this.uri +'@'+ id
     , scaler = this;
 
   this.redis.del(key, function del(err) {
@@ -206,7 +216,7 @@ Scaler.prototype.broadcast = function broadcast(account, session, message, fn) {
     if (err || !server) return fn(err || new Error('Unknown session id '+ session));
 
     request({
-      uri: 'http://'+ server + exports.endpoint,
+      uri: server + exports.endpoint,
       method: 'PUT',
       json: {
         id: id,           // The id of the socket that should receive the data.
@@ -245,7 +255,7 @@ Scaler.prototype.incoming = function incoming(req, res) {
   // Receive the data from the socket. the setEncoding ensures that unicode
   // chars are correctly buffered and parsed before the `data` event is emitted.
   //
-  res.setEncoding('utf8');
+  req.setEncoding('utf8');
   req.on('data', function data(chunk) { buff += chunk; });
   req.once('end', function end() {
     var data;
@@ -253,7 +263,7 @@ Scaler.prototype.incoming = function incoming(req, res) {
     try { data = scaler.decode(buff); }
     catch (e) {
       scaler.end('broken', res);
-      return scaler.emit('error::invalid', buff);
+      return scaler.emit('error::invalid', e, buff);
     }
 
     if (
@@ -262,14 +272,14 @@ Scaler.prototype.incoming = function incoming(req, res) {
       || !('message' in data && 'id' in data)   // And have the required fields
     ) {
       scaler.end('invalid', res);
-      return scaler.emit('error::invalid', buff);
+      return scaler.emit('error::invalid', new Error('Invalid packet received'), buff);
     }
 
     //
     // Try to find the connected socket on our server.
     //
     if (!(data.id in scaler.engine.clients)) {
-      return scaler.end('unkown socket', res);
+      return scaler.end('unknown socket', res);
     }
 
     //
@@ -442,7 +452,7 @@ Scaler.prototype.end = function end(type, res) {
   },
   {
     status: 404,
-    type: 'unkown socket',
+    type: 'unknown socket',
     description: 'The requested socket was not found.'
   },
   {
@@ -496,8 +506,8 @@ Scaler.prototype.listen = function listen() {
   //
   if (port) this.port = port;
   this.server = require('http').createServer();
-  this.server.on('request', this.intercept.bind(this, 'http'));
-  this.server.on('upgrade', this.intercept.bind(this, 'websocket'));
+  this.server.on('request', this.intercept.bind(this, false));
+  this.server.on('upgrade', this.intercept.bind(this, true));
   this.server.on('error', this.proxy.bind(this, 'error'));
   this.server.on('close', this.proxy.bind(this, 'close'));
 
