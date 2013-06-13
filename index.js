@@ -102,7 +102,7 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
   }
 
   //
-  // Add some identifying headers
+  // Add some identifying headers.
   //
   res.setHeader('X-Powered-By', 'Scaler/v'+ this.version);
 
@@ -146,8 +146,8 @@ Scaler.prototype.network = function network(address, port) {
  *
  * @param {String} account Account id.
  * @param {String} session Session id.
- * @param {String} id Connection id
- * @param {Function} fn Optional callback
+ * @param {String} id Connection id.
+ * @param {Function} fn Optional callback.
  * @api private
  */
 Scaler.prototype.connect = function connect(account, session, id, fn) {
@@ -168,8 +168,8 @@ Scaler.prototype.connect = function connect(account, session, id, fn) {
  *
  * @param {String} account Account id.
  * @param {String} session Session id.
- * @param {String} id Connection id
- * @param {Function} fn Optional callback
+ * @param {String} id Connection id.
+ * @param {Function} fn Optional callback.
  */
 Scaler.prototype.disconnect = function disconnect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
@@ -189,7 +189,7 @@ Scaler.prototype.disconnect = function disconnect(account, session, id, fn) {
  *
  * @param {String} account Observe.it account id.
  * @param {String} session Session id of the user.
- * @param {Function} fn Callback
+ * @param {Function} fn Callback.
  * @api private
  */
 Scaler.prototype.find = function find(account, session, fn) {
@@ -213,8 +213,8 @@ Scaler.prototype.find = function find(account, session, fn) {
  *
  * @param {String} account Observe.it account id.
  * @param {String} session Session id of the user.
- * @param {String} message Message
- * @param {Function} fn Callback
+ * @param {String} message Message.
+ * @param {Function} fn Callback.
  * @api public
  */
 Scaler.prototype.forward = function forward(account, session, message, fn) {
@@ -277,9 +277,9 @@ Scaler.prototype.incoming = function incoming(req, res) {
     }
 
     if (
-        typeof data !== 'object'                // Message should be an object
+        typeof data !== 'object'                // Message should be an object.
       || Array.isArray(data)                    // Not an array..
-      || !('message' in data && 'id' in data)   // And have the required fields
+      || !('message' in data && 'id' in data)   // And have the required fields.
     ) {
       scaler.end('invalid', res);
       return scaler.emit('error::invalid', new Error('Invalid packet received'), buff);
@@ -344,7 +344,7 @@ Scaler.prototype.validate = function validate(event, validator) {
       }
 
       //
-      // Emit the event as it's validated, but remove the old callback first
+      // Emit the event as it's validated, but remove the old callback first.
       //
       data.unshift('stream::'+ event);
       data.pop();
@@ -372,7 +372,7 @@ Scaler.prototype.connection = function connection(socket) {
 
   //
   // Create a simple user packet that contains all information about this
-  // connection
+  // connection.
   //
   var user = Object.create(null);
 
@@ -393,7 +393,7 @@ Scaler.prototype.connection = function connection(socket) {
 
     //
     // The received data should be either be an Object or Array, JSON does
-    // support strings and numbers but we don't want those :)
+    // support strings and numbers but we don't want those :).
     //
     if ('object' !== typeof data) return scaler.emit('error::invalid', message);
 
@@ -451,7 +451,7 @@ Scaler.prototype.proxy = function proxy(event) {
  * Return a default response for the given request.
  *
  * @param {String} type The name of the response we should send.
- * @param {Response} res HTTP response object
+ * @param {Response} res HTTP response object.
  * @returns {Buffer} Pre compiled response buffer.
  * @api private
  */
