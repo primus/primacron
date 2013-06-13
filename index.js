@@ -31,7 +31,7 @@ function Scaler(redis, options) {
   // The namespace for the keys that are stored in redis.
   this.namespace = options.namespace || 'scaler';
 
-  // How long do we maintain stake from a single user.
+  // How long do we maintain state from a single user (in seconds).
   this.timeout = options.timeout || 60 * 15;
 
   // The network address this server is approachable on for internal HTTP requests.
@@ -131,15 +131,17 @@ Scaler.prototype.network = function network(address, port) {
  * @param {String} account Account id.
  * @param {String} session Session id.
  * @param {String} id Connection id
+ * @param {Function} fn Optional callback
  * @api private
  */
-Scaler.prototype.connect = function connect(account, session, id) {
+Scaler.prototype.connect = function connect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
     , value = this.interface +'@'+ id
     , scaler = this;
 
-  this.redis.setx(key, this.timeout, value, function setx(err) {
-    if (err) return scaler.emit('error::connect', key, value);
+  this.redis.setex(key, this.timeout, value, function setx(err) {
+    if (fn) fn.apply(this, arguments);
+    if (err) return scaler.emit('error::connect', err, key, value);
   });
 
   return this;
@@ -151,14 +153,16 @@ Scaler.prototype.connect = function connect(account, session, id) {
  * @param {String} account Account id.
  * @param {String} session Session id.
  * @param {String} id Connection id
+ * @param {Function} fn Optional callback
  */
-Scaler.prototype.disconnect = function disconnect(account, session, id) {
+Scaler.prototype.disconnect = function disconnect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
     , value = this.interface +'@'+ id
     , scaler = this;
 
   this.redis.del(key, function del(err) {
-    if (err) return scaler.emit('error::disconnect', key, value);
+    if (fn) fn.apply(this, arguments);
+    if (err) return scaler.emit('error::disconnect', err, key, value);
   });
 
   return this;
@@ -383,6 +387,20 @@ Scaler.prototype.connection = function connection(socket) {
 };
 
 /**
+ * Proxy events from Engine.IO or the HTTP server directly to our Scaler
+ * instance. This is done without throwing errors because we check beforehand if
+ * there are listeners attached for the given event before we emit it.
+ *
+ * @param {String} event Name of the event we are emitting.
+ * @api private
+ */
+Scaler.prototype.proxy = function proxy(event) {
+  var listeners = this.listeners(event) || [];
+
+  if (listeners.length) this.emit.apply(this, arguments);
+};
+
+/**
  * Return a default response for the given request.
  *
  * @param {String} type The name of the response we should send.
@@ -414,13 +432,18 @@ Scaler.prototype.end = function end(type, res) {
   },
   {
     status: 400,
+    type: 'bad request',
+    description: 'Bad request, make sure you are hitting the correct endpoint.'
+  },
+  {
+    status: 400,
     type: 'invalid',
     description: 'Received an invalid JSON document.'
   },
   {
     status: 404,
     type: 'unkown socket',
-    description: 'The requested socket was found.'
+    description: 'The requested socket was not found.'
   },
   {
     status: 200,
@@ -441,10 +464,11 @@ Scaler.prototype.destroy = function destroy(fn) {
   var scaler = this;
 
   this.server.removeAllListeners('request');
-  this.server.removeAllListeners('upgrade');
   this.engine.removeAllListeners('connection');
   this.server.close(function closed() {
     scaler.redis.end();
+    scaler.server.removeAllListeners('error');
+
     (fn || function noop(){}).apply(this, arguments);
   });
 
@@ -459,7 +483,7 @@ Scaler.prototype.destroy = function destroy(fn) {
  */
 Scaler.prototype.listen = function listen() {
   var args = Array.prototype.slice.call(arguments, 0)
-    , port = args[0];
+    , port = +args[0];
 
   //
   // Setup the real-time engine.
@@ -470,10 +494,12 @@ Scaler.prototype.listen = function listen() {
   //
   // Create the HTTP server.
   //
-  this.port = port;
+  if (port) this.port = port;
   this.server = require('http').createServer();
   this.server.on('request', this.intercept.bind(this, 'http'));
   this.server.on('upgrade', this.intercept.bind(this, 'websocket'));
+  this.server.on('error', this.proxy.bind(this, 'error'));
+  this.server.on('close', this.proxy.bind(this, 'close'));
 
   //
   // Proxy all arguments to the server.
