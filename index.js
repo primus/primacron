@@ -545,6 +545,8 @@ Scaler.prototype.listen = function listen() {
   this.server = require('http').createServer();
   this.server.on('request', this.intercept.bind(this, false));
   this.server.on('upgrade', this.intercept.bind(this, true));
+
+  this.server.on('listening', this.proxy.bind(this, 'close'));
   this.server.on('error', this.proxy.bind(this, 'error'));
   this.server.on('close', this.proxy.bind(this, 'close'));
 
