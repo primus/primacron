@@ -5,6 +5,12 @@ var Engine = require('engine.io').Server
   , request = require('request')
   , Route = require('routable');
 
+//
+// Cached prototypes to speed up lookups.
+//
+var toString = Object.prototype.toString
+  , slice = Array.prototype.slice;
+
 /**
  * Create a new Scaler instance.
  *
@@ -211,7 +217,7 @@ Scaler.prototype.find = function find(account, session, fn) {
  * @param {Function} fn Callback
  * @api public
  */
-Scaler.prototype.broadcast = function broadcast(account, session, message, fn) {
+Scaler.prototype.forward = function forward(account, session, message, fn) {
   this.find(account, session, function found(err, server, id) {
     if (err || !server) return fn(err || new Error('Unknown session id '+ session));
 
@@ -226,7 +232,11 @@ Scaler.prototype.broadcast = function broadcast(account, session, message, fn) {
       var status = response.statusCode;
 
       if (err || status !== 200) {
-        return fn(err || new Error('Invalid status code ('+ status +') returned'));
+        err = err || new Error('Invalid status code ('+ status +') returned');
+        err.status = status;
+        err.body = body;
+
+        return fn(err);
       }
 
       //
@@ -285,9 +295,27 @@ Scaler.prototype.incoming = function incoming(req, res) {
     //
     // Write the message to the client.
     //
-    scaler.end('ending', res);
-    scaler.engine.clients[data.id].emit('scaler', data.message);
+    var socket = scaler.engine.clients[data.id];
+
+    //
+    // Determin how we should handle this message.
+    //
+    switch (toString.call(data.message).slice(8, -1)) {
+      case 'String':
+        socket.emit('scaler::pipe', data.message);
+      break;
+
+      case 'Object':
+        socket.emit('scaler::follow', data.message);
+      break;
+
+      default:
+        socket.emit('scaler', data.message);
+    }
+
+    scaler.end('sending', res);
   });
+
   return this;
 };
 
@@ -303,7 +331,7 @@ Scaler.prototype.validate = function validate(event, validator) {
   var scaler = this;
 
   this.on('validate::'+ event, function validating() {
-    var data = Array.prototype.slice.call(arguments, 0);
+    var data = slice.call(arguments, 0);
 
     data.push(function callback(err, ok, tranformed) {
       if (err) return scaler.emit('error::validation', event, err);
@@ -384,6 +412,15 @@ Scaler.prototype.connection = function connection(socket) {
     } else if (!scaler.emit('validate::message', data || message)) {
       scaler.emit('error::validation', data.event, new Error('No validator'));
     }
+  });
+
+  //
+  // Listen for external requests.
+  //
+  socket.on('scaler::pipe', function pipe(data) {
+    if ('string' !== typeof data) data = scaler.encode(data);
+
+    socket.write(data);
   });
 
   //
@@ -492,7 +529,7 @@ Scaler.prototype.destroy = function destroy(fn) {
  * @api public
  */
 Scaler.prototype.listen = function listen() {
-  var args = Array.prototype.slice.call(arguments, 0)
+  var args = slice.call(arguments, 0)
     , port = +args[0];
 
   //

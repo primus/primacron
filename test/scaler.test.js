@@ -114,7 +114,7 @@ describe('scaler', function () {
         scale.redis.get('ns::foo::bar', function (err, value) {
           if (err) return done(err);
 
-          expect(value).to.equal('localhost@baz');
+          expect(value).to.equal('http://localhost@baz');
           done();
         });
       });
@@ -129,7 +129,7 @@ describe('scaler', function () {
         scale.redis.get('ns2::foo::bar', function (err, value) {
           if (err) return done(err);
 
-          expect(value).to.equal('localhost@baz');
+          expect(value).to.equal('http://localhost@baz');
 
           setTimeout(function timeout() {
             scale.redis.get('ns2::foo::bar', function (err, value) {
@@ -152,7 +152,7 @@ describe('scaler', function () {
         expect(err).to.be.instanceOf(Error);
         expect(err.message).to.contain('integer');
         expect(key).to.equal('ff::foo::bar');
-        expect(value).to.equal('localhost@banana');
+        expect(value).to.equal('http://localhost@banana');
 
         done();
       });
@@ -190,7 +190,7 @@ describe('scaler', function () {
         scale.find('foo', 'bar', function (err, server, socket) {
           if (err) return done(err);
 
-          expect(server).to.equal('localhost');
+          expect(server).to.equal('http://localhost');
           expect(socket).to.equal('banana');
           done();
         });
@@ -211,10 +211,11 @@ describe('scaler', function () {
     });
   });
 
-  describe('#broadcast', function () {
+  describe('#forward', function () {
     it('does a PUT request to the server that belongs to the socket.id');
     it('returns an Error object when a non 200 response is received');
     it('receives a JSON response body');
+    it('triggers a')
   });
 
   describe('#incoming', function () {
