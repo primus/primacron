@@ -211,7 +211,10 @@ describe('scaler', function () {
   });
 
   describe('#forward', function () {
-    it('does a PUT request to the server that belongs to the socket.id');
+    it('does a PUT request to the server that belongs to the socket.id', function () {
+
+    });
+
     it('returns an Error object when a non 200 response is received');
     it('receives a JSON response body');
     it('triggers a scaler event');
@@ -414,8 +417,29 @@ describe('scaler', function () {
     });
   });
 
+  describe('#uuid & #generator', function () {
+    it('sets a new id generator', function () {
+      function generator() {}
+
+      expect(server.generator).to.not.equal(generator);
+      server.uuid(generator);
+      expect(server.generator).to.equal(generator);
+    });
+
+    it('generates unique ids', function () {
+      var ids = [];
+
+      function append(err, id) {
+        if (~ids.indexOf(id)) throw new Error('Fuck, not unique');
+        ids.push(id);
+      }
+
+      for (var i = 0; i < 100; i++) server.generator({}, append);
+    });
+  });
+
   describe('#connection', function () {
-    it('connects the socket');
+    it('disconnects the socket');
     it('parses all received messages');
     it('emits an error::json on invalid json');
     it('emits an error::invalid on a invalid message');

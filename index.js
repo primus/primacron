@@ -20,6 +20,8 @@ var toString = Object.prototype.toString
  * @api public
  */
 function Scaler(redis, options) {
+  if (!(this instanceof Scaler)) return new Scaler(redis, options);
+
   options = options || {};
 
   //
@@ -292,7 +294,7 @@ Scaler.prototype.find = function find(account, session, fn) {
 Scaler.prototype.forward = function forward(account, session, message, fn) {
   var scaler = this;
 
-  this.find(account, session, function found(err, server, id) {
+  return this.find(account, session, function found(err, server, id) {
     if (err || !server) return fn(err || new Error('Unknown session id '+ session));
 
     request({
@@ -320,15 +322,13 @@ Scaler.prototype.forward = function forward(account, session, message, fn) {
       fn(undefined, body);
     });
   });
-
-  return this;
 };
 
 /**
  * An other server wants to send something one of our connected sockets.
  *
- * @param {Request} req
- * @param {Respone} res
+ * @param {Request} req HTTP Request instance.
+ * @param {Respone} res HTTP Response instance.
  * @api private
  */
 Scaler.prototype.incoming = function incoming(req, res) {
@@ -404,7 +404,7 @@ Scaler.prototype.incoming = function incoming(req, res) {
 Scaler.prototype.validate = function validate(event, validator) {
   var scaler = this;
 
-  this.on('validate::'+ event, function validating() {
+  return this.on('validate::'+ event, function validating() {
     var data = slice.call(arguments, 0);
 
     data.push(function callback(err, ok, tranformed) {
@@ -428,8 +428,6 @@ Scaler.prototype.validate = function validate(event, validator) {
 
     validator.apply(this, data);
   });
-
-  return this;
 };
 
 /**
