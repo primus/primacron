@@ -350,7 +350,46 @@ describe('scaler', function () {
         throw new Error('Broken');
       });
 
-      scale.emit('validate::foo', 'meh');
+      scale.emit('validate::foo', 'meh', '"meh"');
+    });
+
+    it('automatically detects the callback location with missing args', function (done) {
+      var scale = new Scaler();
+
+      scale.validate('foo', function(arg, brg, crg, drg, cb) {
+        expect(arg).to.equal('foo');
+        expect(!brg).to.equal(true);
+        expect(!crg).to.equal(true);
+        expect(!drg).to.equal(true);
+        expect(cb).to.be.a('function');
+
+        cb(undefined, true);
+      }).once('stream::foo', function (msg, brg, crg, drg, raw) {
+        expect(msg).to.equal(msg);
+        expect(JSON.stringify(msg)).to.equal(raw);
+
+        done();
+      });
+
+      scale.emit('validate::foo', 'foo', '"foo"');
+    });
+
+    it('automatically detects the callback location with tomuch args', function (done) {
+      var scale = new Scaler();
+
+      scale.validate('foo', function(arg, cb) {
+        expect(arg).to.equal('foo');
+        expect(cb).to.be.a('function');
+
+        cb(null, true);
+      }).once('stream::foo', function (foo) {
+        expect(foo).to.equal('foo');
+        expect(arguments.length).to.equal(2);
+
+        done();
+      });
+
+      scale.emit('validate::foo', 'foo', 'bar', 'baz', 'moo', '["foo", "bar", "baz", "moo"]');
     });
 
     it('emits error::validation when an error occures', function (done) {
@@ -373,7 +412,7 @@ describe('scaler', function () {
         throw new Error('Broken');
       });
 
-      scale.emit('validate::foo', 'meh');
+      scale.emit('validate::foo', 'meh', '"meh"');
     });
 
     it('emits error::validation when the validation fails', function (done) {
@@ -396,7 +435,7 @@ describe('scaler', function () {
         throw new Error('Broken');
       });
 
-      scale.emit('validate::foo', 'meh');
+      scale.emit('validate::foo', 'meh', '"meh"');
     });
 
     it('calls stream:: event once the event was validated successfully', function (done) {
@@ -407,13 +446,15 @@ describe('scaler', function () {
         expect(cb).to.be.a('function');
 
         cb();
-      }).once('stream::foo', function (data) {
+      }).once('stream::foo', function (data, raw) {
         expect(data).to.equal('meh');
-        expect(arguments.length).to.equal(1);
+        expect(arguments.length).to.equal(2);
+        expect(JSON.parse(raw)).to.deep.equal(data);
+
         done();
       });
 
-      scale.emit('validate::foo', 'meh');
+      scale.emit('validate::foo', 'meh', '"meh"');
     });
   });
 

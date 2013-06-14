@@ -402,12 +402,19 @@ Scaler.prototype.incoming = function incoming(req, res) {
  * @api public
  */
 Scaler.prototype.validate = function validate(event, validator) {
-  var scaler = this;
+  var callbackargument = validator.length - 1
+    , scaler = this;
 
   return this.on('validate::'+ event, function validating() {
-    var data = slice.call(arguments, 0);
+    var data = slice.call(arguments, 0)
+      , raw = data.pop();
 
-    data.push(function callback(err, ok, tranformed) {
+    //
+    // We know amount of arguments the validator function expects so we use this
+    // information to place the validation callback at the last argument even if
+    // the amount varies.
+    //
+    data[callbackargument] = function callback(err, ok, tranformed) {
       if (err) return scaler.emit('error::validation', event, err);
 
       //
@@ -418,13 +425,14 @@ Scaler.prototype.validate = function validate(event, validator) {
       }
 
       //
-      // Emit the event as it's validated, but remove the old callback first.
+      // Emit the event as it's validated.
       //
+      data = data.slice(0, callbackargument);
       data.unshift('stream::'+ event);
-      data.pop();
+      data.push(raw);
 
       scaler.emit.apply(scaler, data);
-    });
+    };
 
     validator.apply(this, data);
   });
@@ -455,17 +463,17 @@ Scaler.prototype.connection = function connection(socket) {
   //
   // Parse messages.
   //
-  socket.on('message', function preparser(message) {
+  socket.on('message', function preparser(raw) {
     var data;
 
-    try { data = scaler.decode(message); }
-    catch (e) { return scaler.emit('error::json', message); }
+    try { data = scaler.decode(raw); }
+    catch (e) { return scaler.emit('error::json', raw); }
 
     //
     // The received data should be either be an Object or Array, JSON does
     // support strings and numbers but we don't want those :).
     //
-    if ('object' !== typeof data) return scaler.emit('error::invalid', message);
+    if ('object' !== typeof data) return scaler.emit('error::invalid', raw);
 
     //
     // Check if the message was formatted as an event, if it is we need to
@@ -476,11 +484,13 @@ Scaler.prototype.connection = function connection(socket) {
     //
     if (data && 'object' === typeof data && 'event' in data) {
       data.args.unshift('validate::'+ data.event);
+      data.args.push(raw);
+
       if (!scaler.emit.apply(scaler, data.args)) {
         scaler.emit('error::validation', data.event, new Error('No validator'));
       }
-    } else if (!scaler.emit('validate::message', data || message)) {
-      scaler.emit('error::validation', data.event, new Error('No validator'));
+    } else if (!scaler.emit('validate::message', data, raw)) {
+      scaler.emit('error::validation', 'message', new Error('No validator'));
     }
   });
 
