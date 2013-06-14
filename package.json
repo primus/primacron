@@ -19,7 +19,6 @@
   "license": "Closed Source",
   "private": true,
   "dependencies": {
-    "routable": "0.0.x",
     "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
     "request": "2.21.x"
   },

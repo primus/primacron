@@ -3,8 +3,7 @@
 var Engine = require('engine.io').Server
   , Socket = require('engine.io').Socket
   , parser = require('url').parse
-  , request = require('request')
-  , Route = require('routable');
+  , request = require('request');
 
 //
 // Cached prototypes to speed up lookups.
@@ -26,8 +25,8 @@ function Scaler(redis, options) {
   //
   // The HTTP routes that we should be listening on.
   //
-  this.broadcast = new Route(options.broadcast || '/scaler/broadcast');
-  this.endpoint = new Route(options.endpoint || /\/stream\/(.*)?/);
+  this.broadcast = options.broadcast || '/stream/broadcast';
+  this.endpoint = options.endpoint || '/stream/';
 
   // The redis client we need to keep connection state.
   this.redis = redis || require('redis').createClient();
@@ -135,7 +134,8 @@ Scaler.prototype.initialise = function initialise(socket, fn) {
       // Store the session in the query parameters.
       //
       socket.request.query.session = session;
-      scaler.connect(account, session, function connect() {
+
+      scaler.connect(account, session, id, function connect() {
         fn(undefined, { session: session, account: account });
       });
     });
@@ -152,11 +152,12 @@ Scaler.prototype.initialise = function initialise(socket, fn) {
  * @api private
  */
 Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
-  req.query = req.query || parser(req.url, true).query;
+  req.uri = req.uri || parser(req.url, true);
+  req.query = req.query || req.uri.query;
 
   if (
        this.engine
-    && this.endpoint.test(req.url)
+    && this.endpoint === req.uri.pathname
     && 'account' in req.query
   ) {
     if (websocket) return this.engine.handleUpgrade(req, res, head);
@@ -176,7 +177,7 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
 
   if (
        'put' === (req.method || '').toLowerCase()
-    && this.broadcast.test(req.url)
+    && this.broadcast === req.uri.pathname
   ) {
     return this.incoming(req, res);
   }
@@ -289,11 +290,13 @@ Scaler.prototype.find = function find(account, session, fn) {
  * @api public
  */
 Scaler.prototype.forward = function forward(account, session, message, fn) {
+  var scaler = this;
+
   this.find(account, session, function found(err, server, id) {
     if (err || !server) return fn(err || new Error('Unknown session id '+ session));
 
     request({
-      uri: server + exports.endpoint,
+      uri: server + scaler.endpoint,
       method: 'PUT',
       json: {
         id: id,           // The id of the socket that should receive the data.

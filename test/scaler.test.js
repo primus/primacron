@@ -47,8 +47,6 @@ describe('scaler', function () {
 
     expect(scale.broadcast.toString()).to.equal('/foo/broadcast');
     expect(scale.endpoint.toString()).to.equal('/foo/endpoint');
-    expect(scale.broadcast).to.be.instanceOf(require('routable'));
-    expect(scale.endpoint).to.be.instanceOf(require('routable'));
     expect(scale.service).to.equal('http://google.com');
     expect(scale.namespace).to.equal('cows');
   });
@@ -314,12 +312,16 @@ describe('scaler', function () {
     });
 
     it('returns a 200 sending when we write to the socket', function (done) {
-      var io = eio(server.uri + server.endpoint +'?m&session=9797adf&account=foo', {
+      server.uuid(function (socket, fn) {
+        fn(null, 'sessionid');
+      });
+
+      var io = eio(server.uri + server.endpoint +'?m&session=sessionid&account=foo', {
         path: '/stream/'
       });
 
       io.onopen = function onopen() {
-        server.forward('foo', io.id, 'foobar', function (err) {
+        server.forward('foo', 'sessionid', 'foobar', function (err) {
           if (err) return done(err);
         });
       };
