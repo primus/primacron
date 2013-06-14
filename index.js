@@ -296,7 +296,7 @@ Scaler.prototype.forward = function forward(account, session, message, fn) {
     if (err || !server) return fn(err || new Error('Unknown session id '+ session));
 
     request({
-      uri: server + scaler.endpoint,
+      uri: server + scaler.broadcast,
       method: 'PUT',
       json: {
         id: id,           // The id of the socket that should receive the data.

@@ -320,16 +320,17 @@ describe('scaler', function () {
         path: '/stream/'
       });
 
-      io.onopen = function onopen() {
+      io.on('open', function onopen() {
         server.forward('foo', 'sessionid', 'foobar', function (err) {
           if (err) return done(err);
         });
-      };
+      });
 
-      io.onmessage = function onmessage(data) {
+      io.on('message', function onmessage(data) {
         expect(data).to.equal('foobar');
+        io.close();
         done();
-      };
+      });
     });
   });
 
