@@ -1,7 +1,8 @@
 describe('scaler', function () {
   'use strict';
 
-  var request = require('request')
+  var eio = require('engine.io-client')
+    , request = require('request')
     , redis = require('redis')
     , Scaler = require('../')
     , chai = require('chai')
@@ -215,7 +216,7 @@ describe('scaler', function () {
     it('does a PUT request to the server that belongs to the socket.id');
     it('returns an Error object when a non 200 response is received');
     it('receives a JSON response body');
-    it('triggers a')
+    it('triggers a scaler event');
   });
 
   describe('#incoming', function () {
@@ -312,7 +313,22 @@ describe('scaler', function () {
       });
     });
 
-    it('returns a 200 sending when we write to the socket');
+    it('returns a 200 sending when we write to the socket', function (done) {
+      var io = eio(server.uri + server.endpoint +'?m&session=9797adf&account=foo', {
+        path: '/stream/'
+      });
+
+      io.onopen = function onopen() {
+        server.forward('foo', io.id, 'foobar', function (err) {
+          if (err) return done(err);
+        });
+      };
+
+      io.onmessage = function onmessage(data) {
+        expect(data).to.equal('foobar');
+        done();
+      };
+    });
   });
 
   describe('#validate', function () {

@@ -2,6 +2,7 @@
 
 var Engine = require('engine.io').Server
   , Socket = require('engine.io').Socket
+  , parser = require('url').parse
   , request = require('request')
   , Route = require('routable');
 
@@ -26,7 +27,7 @@ function Scaler(redis, options) {
   // The HTTP routes that we should be listening on.
   //
   this.broadcast = new Route(options.broadcast || '/scaler/broadcast');
-  this.endpoint = new Route(options.endpoint || '/stream/');
+  this.endpoint = new Route(options.endpoint || /\/stream\/(.*)?/);
 
   // The redis client we need to keep connection state.
   this.redis = redis || require('redis').createClient();
@@ -81,6 +82,67 @@ Object.defineProperty(Scaler.prototype, 'uri', {
 Scaler.prototype.version = require('./package.json').version;
 
 /**
+ * Add a new custom session id generator.
+ *
+ * @param {Function} generator The UUID generator.
+ * @api public
+ */
+Scaler.prototype.uuid = function uuid(generator) {
+  this.generator = generator;
+  return this;
+};
+
+/**
+ * A simple persistent session generator.
+ *
+ * @param {Socket} socket Engine.IO socket
+ * @param {Function} fn Callback
+ * @api private
+ */
+Scaler.prototype.generator = function generator(socket, fn) {
+  fn(undefined, [1, 1, 1, 1].map(function generator() {
+    return Math.random().toString(36).substring(2).toUpperCase();
+  }).join('-'));
+};
+
+/**
+ * Simple Engine.io onOpen method handler so we can add data to the handshake.
+ *
+ * @see 3rd-Eden/engine.io/commit/627fa5b4e794a5c624447bde34ce8ef284a6ba00
+ * @param {Socket} socket Engine.IO socket
+ * @param {Function} fn Callback.
+ * @api private
+ */
+Scaler.prototype.initialise = function initialise(socket, fn) {
+  var scaler = this;
+
+  //
+  // This horrible next tick is required to make a socket.request.query access
+  // work. The request is set after the new Socket() constructor is invoked and
+  // as the new Socket calls the `engineio.onOpen` method synchronously it will
+  // not have access to it yet. By wrapping our generator in a `nextTick` we can
+  // be certain that the socket has a `request` property and that our generator
+  // can use it.
+  //
+  process.nextTick(function () {
+    scaler.generator(socket, function generated(err, session) {
+      if (err) return fn(err);
+
+      var account = socket.request.query.account
+        , id = socket.id;
+
+      //
+      // Store the session in the query parameters.
+      //
+      socket.request.query.session = session;
+      scaler.connect(account, session, function connect() {
+        fn(undefined, { session: session, account: account });
+      });
+    });
+  });
+};
+
+/**
  * Intercept HTTP requests and handle them accordingly.
  *
  * @param {Boolean} websocket This is a WebSocket request
@@ -90,7 +152,13 @@ Scaler.prototype.version = require('./package.json').version;
  * @api private
  */
 Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
-  if (this.engine && this.endpoint.test(req.url)) {
+  req.query = req.query || parser(req.url, true).query;
+
+  if (
+       this.engine
+    && this.endpoint.test(req.url)
+    && 'account' in req.query
+  ) {
     if (websocket) return this.engine.handleUpgrade(req, res, head);
     return this.engine.handleRequest(req, res);
   } else if (websocket) {
@@ -106,7 +174,10 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
   //
   res.setHeader('X-Powered-By', 'Scaler/v'+ this.version);
 
-  if ('put' === (req.method || '').toLowerCase() && this.broadcast.test(req.url)) {
+  if (
+       'put' === (req.method || '').toLowerCase()
+    && this.broadcast.test(req.url)
+  ) {
     return this.incoming(req, res);
   }
 
@@ -380,8 +451,6 @@ Scaler.prototype.connection = function connection(socket) {
   user.account = account;
   user.id = id;
 
-  scaler.connect(account, session, id);
-
   //
   // Parse messages.
   //
@@ -536,6 +605,7 @@ Scaler.prototype.listen = function listen() {
   // Setup the real-time engine.
   //
   this.engine = new Engine();
+  this.engine.onOpen = this.initialise.bind(this);
   this.engine.on('connection', this.connection.bind(this));
 
   //

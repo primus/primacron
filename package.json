@@ -27,7 +27,7 @@
     "mocha": "1.10.x",
     "chai": "1.6.x",
     "pre-commit": "0.0.3",
-    "redis": "~0.8.3",
-    "engine.io-client": "~0.6.1"
+    "redis": "0.8.3",
+    "engine.io-client": "git://github.com/LearnBoost/engine.io-client.git"
   }
 }
