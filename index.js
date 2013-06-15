@@ -1,7 +1,6 @@
 'use strict';
 
 var Engine = require('engine.io').Server
-  , Socket = require('engine.io').Socket
   , parser = require('url').parse
   , request = require('request');
 
@@ -643,3 +642,13 @@ Scaler.prototype.listen = function listen() {
 // Expose the module's interface.
 //
 module.exports = Scaler;
+
+/**
+ * Create a new server.
+ *
+ * @param {
+ * @api public
+ */
+module.exports.createServer = function createServer(redis, options) {
+  return new Scaler(redis, options)
+};

@@ -1,7 +1,64 @@
 # Scaler
 
 Scaler is a small API wrapper for Engine.IO that takes care of our "scaling" and
-multi server logic. This keeps our services as light as possible.
+multi server logic. This keeps our services as light as possible so we can focus
+on our business logic instead of other issues.
+
+## Installation
+
+Installation in done through git, as this module isn't released a public module
+in the NPM registery.
+
+```
+npm install git+ssh://git@github.com:observing/scaler.git#master
+```
+
+## Creating your first server
+
+The module exposes it's constructor as primary interface. This makes it easy to
+extend and to initialise:
+
+```js
+var Scaler = require('scaler')
+  , redis = require('redis');
+
+var server = new Scaler(redis.createClient(), { options })
+```
+
+Or if want some alternate syntax you could use:
+
+```js
+var scaler = require('scaler')
+  , redis = require('redis');
+
+var server = scaler.createServer(redis, { options });
+```
+
+And even:
+
+```
+var scaler = require('scaler')
+  , redis = require('redis');
+
+var server = scaler(redis.createClient(), { options })
+```
+
+Once you've created your server instance, it needs to listen to port number.
+This works just like a regular `net.Server` instance using a `.listen` method.
+All the arguments that are supplied here are directly proxied to the HTTP
+server.
+
+```js
+server.listen(8080, function () {
+  // listening
+});
+```
+
+## Connecting
+
+The server exposes the `engine.io` endpoint as `/stream/` by default path. The
+server assumes that all connections will be made with an `account` parameter in
+the query string.
 
 ## Error events
 
