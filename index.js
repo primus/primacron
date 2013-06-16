@@ -1,8 +1,10 @@
 'use strict';
 
 var Engine = require('engine.io').Server
+  , Socket = require('engine.io').Socket
   , parser = require('url').parse
-  , request = require('request');
+  , request = require('request')
+  , async = require('async');
 
 //
 // Cached prototypes to speed up lookups.
@@ -16,6 +18,21 @@ var toString = Object.prototype.toString
 function noop() {}
 
 /**
+ * Simple user interface which will optimize our memory usage.
+ *
+ * @constructor
+ * @param {String} account The account id.
+ * @param {String} session the session id.
+ * @param {String} id The Engine.IO socket id
+ * @api private
+ */
+function User(account, session, id) {
+  this.account = account;
+  this.session = session;
+  this.id = this;
+}
+
+/**
  * Create a new Scaler instance.
  *
  * @constructor
@@ -23,7 +40,7 @@ function noop() {}
  * @param {Object} options Scaler options.
  * @api public
  */
-function Scaler(redis, options) {
+var Scaler = module.exports = function Scaler(redis, options) {
   if (!(this instanceof Scaler)) return new Scaler(redis, options);
 
   options = options || {};
@@ -111,32 +128,6 @@ Scaler.prototype.generator = function generator(socket, fn) {
 };
 
 /**
- * A simple async interator.
- *
- * @param {Mixed} data Initial data.
- * @param {Array} arr Array of functions
- * @param {Function} fn Completion callback.
- * @api private
- */
-Scaler.prototype.async = function async(data, arr, fn) {
-  fn = fn || noop;
-
-  var expected = arr.length
-    , completed = 0;
-
-  if (!expected) return fn();
-
-  (function iterator(data) {
-    arr[completed](data, function next(err, newdata) {
-      if (err) return fn(err);
-      if (++completed !== expected) return iterator(newdata || data);
-
-      fn(undefined, newdata || data);
-    });
-  }());
-};
-
-/**
  * Simple Engine.io onOpen method handler so we can add data to the handshake.
  *
  * @see 3rd-Eden/engine.io/commit/627fa5b4e794a5c624447bde34ce8ef284a6ba00
@@ -156,11 +147,11 @@ Scaler.prototype.initialise = function initialise(socket, fn) {
   // can use it.
   //
   process.nextTick(function ticktock() {
-    scaler.async(socket, [
+    async.waterfall([
       //
       // 1: Generate a session id.
       //
-      scaler.generator.bind(this),
+      scaler.generator.bind(this, socket),
 
       //
       // 2: Add the session, account and id so we can find this user back.
@@ -173,7 +164,9 @@ Scaler.prototype.initialise = function initialise(socket, fn) {
         //
         socket.request.query.session = data;
 
-        scaler.connect(account, data, socket.id, function (err) {
+        scaler.connect(account, data, socket.id, function (err, members) {
+          if (!err) socket.tail = members;
+
           return next(err, { session: data, account: account });
         });
       }
@@ -266,8 +259,24 @@ Scaler.prototype.connect = function connect(account, session, id, fn) {
     , value = this.uri +'@'+ id
     , scaler = this;
 
-  this.redis.setex(key, this.timeout, value, function setx(err) {
-    if (fn) fn.apply(this, arguments);
+  this.redis.multi()
+    .setex(key, this.timeout, value)    // Save our update location.
+    .smembers(key +'::pipe')            // Retrieve all users that are listening.
+  .exec(function setx(err, replies) {
+    var data;
+
+    //
+    // We need to "parse" the replies to determin if we actually received an
+    // error. Because this fucking pieces of shitty `node-redis` library doesn't
+    // correctly parse error responses for MULTI/EXEC calls.
+    //
+    replies.some(function some(reply) {
+      if (!err && ~reply.indexOf('ERR'))  err = new Error(reply);
+
+      return !!err;
+    });
+
+    if (fn) fn.call(this, err, replies[1][1]);
     if (err) return scaler.emit('error::connect', err, key, value);
   });
 
@@ -362,6 +371,36 @@ Scaler.prototype.forward = function forward(account, session, message, fn) {
 };
 
 /**
+ * Pipe two different sockets.
+ *
+ * TODO: As we are following socket, we probably need to mark this socket as
+ * `tail` as well..
+ *
+ * @param {Socket} socket The Engine.IO socket that want's to follow a user.
+ * @param {String} account Account id.
+ * @param {String} session Session id.
+ * @param {Function} fn Callback.
+ * @api public
+ */
+Scaler.prototype.pipe = function pipe(socket, account, session, fn) {
+  if (account !== socket.request.query.account) {
+    return fn(new Error('Cannot follow other accounts'));
+  }
+
+  var key = this.namespace +'::'+ account +'::'+ session +'::pipe'
+    , value = this.uri +'@'+ socket.id
+    , scaler = this;
+
+  this.redis.sadd(key, value, function follow(err) {
+    if (err) return fn(err);
+
+    scaler.forward(account, session, [value], fn);
+  });
+
+  return this;
+};
+
+/**
  * An other server wants to send something one of our connected sockets.
  *
  * @param {Request} req HTTP Request instance.
@@ -416,8 +455,8 @@ Scaler.prototype.incoming = function incoming(req, res) {
         socket.emit('scaler::pipe', data.message);
       break;
 
-      case 'Object':
-        socket.emit('scaler::follow', data.message);
+      case 'Array':
+        socket.emit('scaler::tail', data.message);
       break;
 
       default:
@@ -485,7 +524,14 @@ Scaler.prototype.connection = function connection(socket) {
   var session = socket.request.query.session
     , account = socket.request.query.account
     , id = socket.id
-    , scaler = this;
+    , scaler = this
+    , user;
+
+  //
+  // A simple user packet that would give un enough information on who the fuck
+  // the user is.
+  //
+  user = new User(account, session, id);
 
   //
   // Parse messages.
@@ -533,11 +579,23 @@ Scaler.prototype.connection = function connection(socket) {
   });
 
   //
+  // Listen for new followers
+  //
+  socket.on('scaler::tail', function tail(members) {
+    members.forEach(function follower(member) {
+      if (~socket.tail.indexOf(member)) return;
+
+      socket.tail.push(member);
+    });
+  });
+
+  //
   // Clean up the socket connection. Remove all listeners.
   //
   socket.once('close', function disconnect() {
     scaler.disconnect(account, session, id);
     socket.removeAllListeners();
+    user = {};
   });
 };
 
@@ -667,17 +725,33 @@ Scaler.prototype.listen = function listen() {
   return this;
 };
 
-//
-// Expose the module's interface.
-//
-module.exports = Scaler;
-
 /**
  * Create a new server.
  *
  * @param {
  * @api public
  */
-module.exports.createServer = function createServer(redis, options) {
-  return new Scaler(redis, options)
+Scaler.createServer = function createServer(redis, options) {
+  return new Scaler(redis, options);
 };
+
+//
+// Expose the User object.
+//
+Scaler.User = User;
+
+
+//
+// !!! IMPORTANT !!!
+// Some extensions to the Engine.IO Socket that would make it easier to
+// communicate with the connected clients.
+// !!! IMPORTANT !!!
+//
+
+/**
+ * Stores a list of connections that tailing our every message.
+ *
+ * @type {Array}
+ * @private
+ */
+Socket.prototype.tail = [];

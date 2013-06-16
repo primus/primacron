@@ -145,6 +145,8 @@ describe('scaler', function () {
     it('emits error::connect on failures', function (done) {
       var scale = new Scaler(null , { namespace: 'ff', timeout: 'this should fail' });
 
+      this.timeout(10000);
+
       scale.connect('foo', 'bar', 'banana');
 
       scale.on('error::connect', function error(err, key, value) {
