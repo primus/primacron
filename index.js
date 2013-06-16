@@ -10,6 +10,11 @@ var Engine = require('engine.io').Server
 var toString = Object.prototype.toString
   , slice = Array.prototype.slice;
 
+//
+// Noop function.
+//
+function noop() {}
+
 /**
  * Create a new Scaler instance.
  *
@@ -106,6 +111,32 @@ Scaler.prototype.generator = function generator(socket, fn) {
 };
 
 /**
+ * A simple async interator.
+ *
+ * @param {Mixed} data Initial data.
+ * @param {Array} arr Array of functions
+ * @param {Function} fn Completion callback.
+ * @api private
+ */
+Scaler.prototype.async = function async(data, arr, fn) {
+  fn = fn || noop;
+
+  var expected = arr.length
+    , completed = 0;
+
+  if (!expected) return fn();
+
+  (function iterator(data) {
+    arr[completed](data, function next(err, newdata) {
+      if (err) return fn(err);
+      if (++completed !== expected) return iterator(newdata || data);
+
+      fn(undefined, newdata || data);
+    });
+  }());
+};
+
+/**
  * Simple Engine.io onOpen method handler so we can add data to the handshake.
  *
  * @see 3rd-Eden/engine.io/commit/627fa5b4e794a5c624447bde34ce8ef284a6ba00
@@ -124,22 +155,29 @@ Scaler.prototype.initialise = function initialise(socket, fn) {
   // be certain that the socket has a `request` property and that our generator
   // can use it.
   //
-  process.nextTick(function () {
-    scaler.generator(socket, function generated(err, session) {
-      if (err) return fn(err);
-
-      var account = socket.request.query.account
-        , id = socket.id;
+  process.nextTick(function ticktock() {
+    scaler.async(socket, [
+      //
+      // 1: Generate a session id.
+      //
+      scaler.generator.bind(this),
 
       //
-      // Store the session in the query parameters.
+      // 2: Add the session, account and id so we can find this user back.
       //
-      socket.request.query.session = session;
+      function connect(data, next) {
+        var account = socket.request.query.account;
 
-      scaler.connect(account, session, id, function connect() {
-        fn(undefined, { session: session, account: account });
-      });
-    });
+        //
+        // Store the session in the query parameters.
+        //
+        socket.request.query.session = data;
+
+        scaler.connect(account, data, socket.id, function (err) {
+          return next(err, { session: data, account: account });
+        });
+      }
+    ], fn);
   });
 };
 
@@ -304,7 +342,7 @@ Scaler.prototype.forward = function forward(account, session, message, fn) {
         message: message  // The actual message.
       }
     }, function requested(err, response, body) {
-      var status = response.statusCode;
+      var status = (response || {}).statusCode;
 
       if (err || status !== 200) {
         err = err || new Error('Invalid status code ('+ status +') returned');
@@ -450,29 +488,21 @@ Scaler.prototype.connection = function connection(socket) {
     , scaler = this;
 
   //
-  // Create a simple user packet that contains all information about this
-  // connection.
-  //
-  var user = Object.create(null);
-
-  user.session = session;
-  user.account = account;
-  user.id = id;
-
-  //
   // Parse messages.
   //
   socket.on('message', function preparser(raw) {
     var data;
 
     try { data = scaler.decode(raw); }
-    catch (e) { return scaler.emit('error::json', raw); }
+    catch (e) { return scaler.emit('error::json', e, raw); }
 
     //
     // The received data should be either be an Object or Array, JSON does
     // support strings and numbers but we don't want those :).
     //
-    if ('object' !== typeof data) return scaler.emit('error::invalid', raw);
+    if ('object' !== typeof data) {
+      return scaler.emit('error::invalid', new Error('Not an object'), raw);
+    }
 
     //
     // Check if the message was formatted as an event, if it is we need to
@@ -486,10 +516,10 @@ Scaler.prototype.connection = function connection(socket) {
       data.args.push(raw);
 
       if (!scaler.emit.apply(scaler, data.args)) {
-        scaler.emit('error::validation', data.event, new Error('No validator'));
+        scaler.emit('error::validation', new Error('Validator missing'), data.event);
       }
     } else if (!scaler.emit('validate::message', data, raw)) {
-      scaler.emit('error::validation', 'message', new Error('No validator'));
+      scaler.emit('error::validation', new Error('Validator missing'), 'message');
     }
   });
 
@@ -508,7 +538,6 @@ Scaler.prototype.connection = function connection(socket) {
   socket.once('close', function disconnect() {
     scaler.disconnect(account, session, id);
     socket.removeAllListeners();
-    user = null;
   });
 };
 
@@ -595,7 +624,7 @@ Scaler.prototype.destroy = function destroy(fn) {
     scaler.redis.end();
     scaler.server.removeAllListeners('error');
 
-    (fn || function noop(){}).apply(this, arguments);
+    (fn || noop).apply(this, arguments);
   });
 
   return this;
