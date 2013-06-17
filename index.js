@@ -276,7 +276,7 @@ Scaler.prototype.connect = function connect(account, session, id, fn) {
       return !!err;
     });
 
-    if (fn) fn.call(this, err, replies[1][1]);
+    if (fn) fn.call(this, err, replies[1]);
     if (err) return scaler.emit('error::connect', err, key, value);
   });
 

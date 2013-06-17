@@ -158,6 +158,22 @@ describe('scaler', function () {
         done();
       });
     });
+
+    it('retrieve the "tailgators" when joining', function (done) {
+      var scale = new Scaler(null, { namespace: 'ye' });
+
+      scale.redis.sadd('ye::foo::bar::pipe', scale.uri +'@momoa', function (err) {
+        if (err) return done(err);
+
+        scale.connect('foo', 'bar', 'banana', function (err, tailgators) {
+          if (err) return done(err);
+
+          expect(tailgators).to.be.a('array');
+          expect(tailgators[0]).to.equal(scale.uri +'@momoa');
+          done();
+        });
+      });
+    });
   });
 
   describe('#disconnect', function () {
