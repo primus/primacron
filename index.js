@@ -595,7 +595,6 @@ Scaler.prototype.connection = function connection(socket) {
   socket.once('close', function disconnect() {
     scaler.disconnect(account, session, id);
     socket.removeAllListeners();
-    user = {};
   });
 };
 
