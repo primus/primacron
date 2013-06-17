@@ -392,7 +392,7 @@ Scaler.prototype.pipe = function pipe(socket, account, session, fn) {
   this.redis.sadd(key, value, function follow(err) {
     if (err) return fn(err);
 
-    scaler.forward(account, session, [value], fn);
+    scaler.forward(account, session, [ value ], fn);
   });
 
   return this;

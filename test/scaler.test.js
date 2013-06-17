@@ -368,7 +368,26 @@ describe('scaler', function () {
   });
 
   describe('#pipe', function () {
-    it('doesnt pipe to other accounts');
+    function transporter() {
+      var request = { query: { account: 'foo' }}
+        , t = transport(request);
+
+      t.request = request;
+
+      return t;
+    }
+
+    it('doesnt pipe to other accounts', function (done) {
+      var socket = new Socket('id', server.engine, transporter());
+
+      server.pipe(socket, 'bar', 'baz', function (err) {
+        expect(err).to.be.instanceOf(Error);
+        expect(err.message).to.include('accounts');
+
+        done();
+      });
+    });
+
     it('adds the socket id to the set');
     it('forwards a message to the socket that theres a new follower');
   });
