@@ -11,6 +11,7 @@ describe('scaler', function () {
     , WebSocket = require('ws')
     , expect = chai.expect
     , portnumbers = 1024
+    , User = Scaler.User
     , server
     , reds;
 
@@ -522,7 +523,7 @@ describe('scaler', function () {
         throw new Error('Broken');
       });
 
-      scale.emit('validate::foo', 'meh', '"meh"');
+      scale.emit('validate::foo', 'meh', new User(), '"meh"');
     });
 
     it('automatically detects the callback location with missing args', function (done) {
@@ -536,14 +537,16 @@ describe('scaler', function () {
         expect(cb).to.be.a('function');
 
         cb(undefined, true);
-      }).once('stream::foo', function (msg, brg, crg, drg, raw) {
-        expect(msg).to.equal(msg);
+      }).once('stream::foo', function (msg, brg, crg, drg, raw, user) {
+        expect(msg).to.equal('foo');
+        expect(user).to.be.instanceOf(User);
+
         expect(JSON.stringify(msg)).to.equal(raw);
 
         done();
       });
 
-      scale.emit('validate::foo', 'foo', '"foo"');
+      scale.emit('validate::foo', 'foo', new User(), '"foo"');
     });
 
     it('automatically detects the callback location with tomuch args', function (done) {
@@ -556,7 +559,7 @@ describe('scaler', function () {
         cb(null, true);
       }).once('stream::foo', function (foo) {
         expect(foo).to.equal('foo');
-        expect(arguments.length).to.equal(2);
+        expect(arguments.length).to.equal(3);
 
         done();
       });
@@ -584,7 +587,7 @@ describe('scaler', function () {
         throw new Error('Broken');
       });
 
-      scale.emit('validate::foo', 'meh', '"meh"');
+      scale.emit('validate::foo', 'meh', new User(),'"meh"');
     });
 
     it('emits error::validation when the validation fails', function (done) {
@@ -607,7 +610,7 @@ describe('scaler', function () {
         throw new Error('Broken');
       });
 
-      scale.emit('validate::foo', 'meh', '"meh"');
+      scale.emit('validate::foo', 'meh', new User(), '"meh"');
     });
 
     it('calls stream:: event once the event was validated successfully', function (done) {
@@ -618,15 +621,16 @@ describe('scaler', function () {
         expect(cb).to.be.a('function');
 
         cb();
-      }).once('stream::foo', function (data, raw) {
+      }).once('stream::foo', function (data, raw, user) {
         expect(data).to.equal('meh');
-        expect(arguments.length).to.equal(2);
+        expect(arguments.length).to.equal(3);
+        expect(user).to.be.instanceOf(User);
         expect(JSON.parse(raw)).to.deep.equal(data);
 
         done();
       });
 
-      scale.emit('validate::foo', 'meh', '"meh"');
+      scale.emit('validate::foo', 'meh', new User(), '"meh"');
     });
   });
 

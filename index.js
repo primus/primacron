@@ -341,30 +341,43 @@ Scaler.prototype.forward = function forward(account, session, message, fn) {
   return this.find(account, session, function found(err, server, id) {
     if (err || !server) return fn(err || new Error('Unknown session id '+ session));
 
-    request({
-      uri: server + scaler.broadcast,
-      method: 'PUT',
-      json: {
-        id: id,           // The id of the socket that should receive the data.
-        message: message  // The actual message.
-      }
-    }, function requested(err, response, body) {
-      var status = (response || {}).statusCode;
+    scaler.communicate(server, id, message, fn);
+  });
+};
 
-      if (err || status !== 200) {
-        err = err || new Error('Invalid status code ('+ status +') returned');
-        err.status = status;
-        err.body = body;
+/**
+ * Communicate with other servers.
+ *
+ * @param {String} server The server address.
+ * @param {String} id The Socket id.
+ * @param {Mixed} message The message you want to send.
+ * @param {Function} fn Callback
+ * @api private
+ */
+Scaler.prototype.communicate = function communicate(server, id, message, fn) {
+  request({
+    uri: server + this.broadcast,
+    method: 'PUT',
+    json: {
+      id: id,           // The id of the socket that should receive the data.
+      message: message  // The actual message.
+    }
+  }, function requested(err, response, body) {
+    var status = (response || {}).statusCode;
 
-        return fn(err);
-      }
+    if (err || status !== 200) {
+      err = err || new Error('Invalid status code ('+ status +') returned');
+      err.status = status;
+      err.body = body;
 
-      //
-      // We only have successfully send the message when we received
-      // a statusCode 200 from the targetted server.
-      //
-      fn(undefined, body);
-    });
+      return fn(err);
+    }
+
+    //
+    // We only have successfully send the message when we received
+    // a statusCode 200 from the targetted server.
+    //
+    fn(undefined, body);
   });
 };
 
@@ -481,6 +494,7 @@ Scaler.prototype.validate = function validate(event, validator) {
 
   return this.on('validate::'+ event, function validating() {
     var data = slice.call(arguments, 0)
+      , user = data.pop()
       , raw = data.pop();
 
     //
@@ -503,9 +517,24 @@ Scaler.prototype.validate = function validate(event, validator) {
       //
       data = data.slice(0, callbackargument);
       data.unshift('stream::'+ event);
+      data.push(user);
       data.push(raw);
 
       scaler.emit.apply(scaler, data);
+
+      //
+      // Now that everything is validated, we are going to check if we have any
+      // socket tail's who want to receive this data.
+      //
+      if (!scaler.engine || !(user.id in scaler.engine.clients)) return;
+      var socket = scaler.engine.clients[user.id];
+
+      socket.tail.forEach(function tail(gator) {
+        if (!gator) return;
+
+        var data = gator.split('@');
+        scaler.communicate(data[0], data[1], raw, noop);
+      });
     };
 
     validator.apply(this, data);
@@ -538,14 +567,14 @@ Scaler.prototype.connection = function connection(socket) {
     var data;
 
     try { data = scaler.decode(raw); }
-    catch (e) { return scaler.emit('error::json', e, raw); }
+    catch (e) { return scaler.emit('error::json', e, user, raw); }
 
     //
     // The received data should be either be an Object or Array, JSON does
     // support strings and numbers but we don't want those :).
     //
     if ('object' !== typeof data) {
-      return scaler.emit('error::invalid', new Error('Not an object'), raw);
+      return scaler.emit('error::invalid', new Error('Not an object'), user, raw);
     }
 
     //
@@ -557,13 +586,14 @@ Scaler.prototype.connection = function connection(socket) {
     //
     if (data && 'object' === typeof data && 'event' in data) {
       data.args.unshift('validate::'+ data.event);
+      data.args.push(user);
       data.args.push(raw);
 
       if (!scaler.emit.apply(scaler, data.args)) {
-        scaler.emit('error::validation', new Error('Validator missing'), data.event);
+        scaler.emit('error::validation', new Error('Validator missing'), user, data.event);
       }
-    } else if (!scaler.emit('validate::message', data, raw)) {
-      scaler.emit('error::validation', new Error('Validator missing'), 'message');
+    } else if (!scaler.emit('validate::message', data, user, raw)) {
+      scaler.emit('error::validation', new Error('Validator missing'), user, 'message');
     }
   });
 
@@ -736,7 +766,6 @@ Scaler.createServer = function createServer(redis, options) {
 // Expose the User object.
 //
 Scaler.User = User;
-
 
 //
 // !!! IMPORTANT !!!
