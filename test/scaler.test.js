@@ -1,11 +1,14 @@
 describe('scaler', function () {
   'use strict';
 
-  var eio = require('engine.io-client')
+  var transport = require('engine.io').transports.polling
+    , Socket = require('engine.io').Socket
+    , eio = require('engine.io-client')
     , request = require('request')
     , redis = require('redis')
     , Scaler = require('../')
     , chai = require('chai')
+    , WebSocket = require('ws')
     , expect = chai.expect
     , portnumbers = 1024
     , server
@@ -52,17 +55,146 @@ describe('scaler', function () {
   });
 
   it('is an EventEmitter', function () {
-    var scale = new Scaler();
+    expect(server).to.be.instanceOf(require('events').EventEmitter);
+  });
 
-    expect(scale).to.be.instanceOf(require('events').EventEmitter);
+  it('exposes the version number', function () {
+    expect(server.version).to.equal(require('../package.json').version);
+  });
+
+  describe('#initialise', function () {
+    function transporter() {
+      var request = { query: { account: 'foo' }}
+        , t = transport(request);
+
+      t.request = request;
+
+      return t;
+    }
+
+    it('generates a session', function (done) {
+      var socket = new Socket('id', server.engine, transporter());
+
+      server.initialise(socket, function initialise(err, data) {
+        if (err) return done(err);
+
+        expect(data).to.be.a('object');
+        expect(socket.request.query.account).to.equal(data.account);
+        expect(socket.request.query.session).to.equal(data.session);
+        expect(socket.tail).to.have.length(0);
+
+        done();
+      });
+    });
+
+    it('adds tailgators to the socket object', function (done) {
+      var socket = new Socket('id', server.engine, transporter())
+        , ns = server.namespace +'::foo::sessionid::pipe';
+
+      server.uuid(function uuid(socket, fn) {
+        fn(null, 'sessionid');
+      });
+
+      server.redis.sadd(ns, server.uri +'@momoa',
+        function (err) {
+        if (err) return done(err);
+
+        server.initialise(socket, function initialise(err, data) {
+          if (err) return done(err);
+
+          expect(data).to.be.a('object');
+          expect(socket.request.query.account).to.equal(data.account);
+          expect(socket.request.query.session).to.equal(data.session);
+          expect(socket.tail).to.have.length(1);
+          expect(socket.tail[0]).to.equal(server.uri + '@momoa');
+
+          done();
+        });
+      });
+    });
   });
 
   describe('#intercept', function () {
-    it('closes WebSockets on disallowed ports');
-    it('accepts WebSockets on allowed ports');
-    it('intercepts PUT requests');
-    it('redirects to the given service');
-    it('closes with a 400 JSON packet');
+    it('closes WebSockets on disallowed paths', function (done) {
+      var ws = new WebSocket(server.uri.replace('http', 'ws'));
+
+      ws.on('error', function afa() {
+        done();
+      });
+    });
+
+    it('intercepts PUT requests', function (done) {
+      request({
+        uri: server.uri + server.broadcast,
+        json: {
+          id: 'foo',
+          message: 'mew'
+        },
+        method: 'put'
+      }, function (err, res, body) {
+        if (err) return done(err);
+
+        expect(res.headers).to.have.property('x-powered-by');
+        expect(res.headers['x-powered-by']).to.equal('Scaler/v'+ server.version);
+        done();
+      });
+    });
+
+    it('dies put requests on the incorrect paths', function (done) {
+      request({
+        uri: server.uri +'/cows',
+        json: {
+          id: 'foo',
+          message: 'madfaf'
+        },
+        method: 'put'
+      }, function (err, res, body) {
+        if (err) return done(err);
+
+        expect(res.headers).to.not.have.property('x-powered-by');
+        done();
+      });
+    });
+
+    it('redirects to the given service', function (done) {
+      var scaler = new Scaler(null, { service: 'http://google.com' });
+
+      scaler.listen(++portnumbers, function () {
+        request({
+          uri: scaler.uri +'/cows',
+          json: {
+            id: 'foo',
+            message: 'madfaf'
+          },
+          method: 'post',
+          followRedirect: false
+        }, function (err, res, body) {
+          if (err) return done(err);
+
+          expect(res.statusCode).to.equal(301);
+          expect(res.headers.location).to.equal('http://google.com');
+
+          scaler.destroy(done);
+        });
+      });
+    });
+
+    it('closes with a 400 JSON packet', function (done) {
+      request({
+        uri: server.uri +'/cows',
+        json: {
+          id: 'foo',
+          message: 'madfaf'
+        },
+        method: 'post'
+      }, function (err, res, body) {
+        if (err) return done(err);
+
+        expect(res.statusCode).to.equal(400);
+        expect(body.description).to.include('Bad request');
+        done();
+      });
+    });
   });
 
   describe('#network', function () {
@@ -229,13 +361,16 @@ describe('scaler', function () {
   });
 
   describe('#forward', function () {
-    it('does a PUT request to the server that belongs to the socket.id', function () {
-
-    });
-
+    it('does a PUT request to the server that belongs to the socket.id');
     it('returns an Error object when a non 200 response is received');
     it('receives a JSON response body');
     it('triggers a scaler event');
+  });
+
+  describe('#pipe', function () {
+    it('doesnt pipe to other accounts');
+    it('adds the socket id to the set');
+    it('forwards a message to the socket that theres a new follower');
   });
 
   describe('#incoming', function () {

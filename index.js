@@ -81,7 +81,7 @@ var Scaler = module.exports = function Scaler(redis, options) {
   //
   this.server = null;         // HTTP server instance.
   this.engine = null;         // Engine.IO server.
-}
+};
 
 //
 // The scaler inherits from the EventEmitter so we can savely emit events
@@ -106,7 +106,6 @@ Scaler.prototype.version = require('./package.json').version;
 /**
  * Add a new custom session id generator.
  *
- * @param {Function} generator The UUID generator.
  * @api public
  */
 Scaler.prototype.uuid = function uuid(generator) {
@@ -202,15 +201,14 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
     return res.end();
   }
 
-  //
-  // Add some identifying headers.
-  //
-  res.setHeader('X-Powered-By', 'Scaler/v'+ this.version);
-
   if (
        'put' === (req.method || '').toLowerCase()
     && this.broadcast === req.uri.pathname
   ) {
+    //
+    // Add some identifying headers.
+    //
+    res.setHeader('X-Powered-By', 'Scaler/v'+ this.version);
     return this.incoming(req, res);
   }
 
