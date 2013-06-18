@@ -81,6 +81,11 @@ var Scaler = module.exports = function Scaler(redis, options) {
   //
   this.server = null;         // HTTP server instance.
   this.engine = null;         // Engine.IO server.
+
+  //
+  // Stores `sockets` by created session ids.
+  //
+  this.sockets = Object.create(null);
 };
 
 //
@@ -244,6 +249,17 @@ Scaler.prototype.network = function network(address, port) {
 };
 
 /**
+ * Find the socket by session id.
+ *
+ * @param {String} session The session id we want to find.
+ * @returns {Socket} The matching engine.io socket
+ * @api private
+ */
+Scaler.prototype.socket = function socket(session) {
+  return this.sockets[session];
+};
+
+/**
  * Add a new connection.
  *
  * @param {String} account Account id.
@@ -400,6 +416,8 @@ Scaler.prototype.communicate = function communicate(server, id, message, fn) {
  * @api public
  */
 Scaler.prototype.pipe = function pipe(socket, account, session, fn) {
+  fn = fn || noop;
+
   if (account !== socket.request.query.account) {
     return fn(new Error('Cannot follow other accounts'));
   }
@@ -574,6 +592,11 @@ Scaler.prototype.connection = function connection(socket) {
   user = new User(account, session, id);
 
   //
+  // Store a reference for the socket.
+  //
+  this.sockets[session] = socket;
+
+  //
   // Parse messages.
   //
   socket.on('message', function preparser(raw) {
@@ -651,6 +674,7 @@ Scaler.prototype.connection = function connection(socket) {
   //
   socket.once('close', function disconnect() {
     scaler.disconnect(account, session, id);
+    delete scaler.sockets[session];
     socket.removeAllListeners();
   });
 };
@@ -810,3 +834,16 @@ Scaler.User = User;
  * @private
  */
 Socket.prototype.tail = [];
+
+/**
+ * Emit an event.
+ *
+ * @param {String} name The event name.
+ * @api public
+ */
+Socket.prototype.event = function event(name) {
+  this.write(this.encode({
+    event: event,
+    args: slice.call(arguments, 1)
+  }));
+};
