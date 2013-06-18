@@ -275,7 +275,10 @@ Scaler.prototype.connect = function connect(account, session, id, fn) {
     });
 
     if (fn) fn.call(this, err, replies[1]);
-    if (err) return scaler.emit('error::connect', err, key, value);
+    if (err) return scaler.emit('error::connect', err, {
+      key: key,
+      value: value
+    });
   });
 
   return this;
@@ -296,7 +299,10 @@ Scaler.prototype.disconnect = function disconnect(account, session, id, fn) {
 
   this.redis.del(key, function del(err) {
     if (fn) fn.apply(this, arguments);
-    if (err) return scaler.emit('error::disconnect', err, key, value);
+    if (err) return scaler.emit('error::disconnect', err, {
+      key: key,
+      value: value
+    });
   });
 
   return this;
@@ -434,7 +440,10 @@ Scaler.prototype.incoming = function incoming(req, res) {
     try { data = scaler.decode(buff); }
     catch (e) {
       scaler.end('broken', res);
-      return scaler.emit('error::invalid', e, buff);
+      return scaler.emit('error::invalid', e, {
+        raw: buff,
+        request: req
+      });
     }
 
     if (
@@ -443,7 +452,10 @@ Scaler.prototype.incoming = function incoming(req, res) {
       || !('message' in data && 'id' in data)   // And have the required fields.
     ) {
       scaler.end('invalid', res);
-      return scaler.emit('error::invalid', new Error('Invalid packet received'), buff);
+      return scaler.emit('error::invalid', new Error('Invalid packet received'), {
+        raw: buff,
+        request: req
+      });
     }
 
     //
@@ -494,8 +506,8 @@ Scaler.prototype.validate = function validate(event, validator) {
 
   return this.on('validate::'+ event, function validating() {
     var data = slice.call(arguments, 0)
-      , user = data.pop()
-      , raw = data.pop();
+      , raw = data.pop()
+      , user = data.pop();
 
     //
     // We know amount of arguments the validator function expects so we use this
@@ -503,13 +515,14 @@ Scaler.prototype.validate = function validate(event, validator) {
     // the amount varies.
     //
     data[callbackargument] = function callback(err, ok, tranformed) {
-      if (err) return scaler.emit('error::validation', event, err);
+      if (err || ok === false) {
+        err = err || new Error('Failed to validate the data');
 
-      //
-      // Only emit an validation error when ok is set to false.
-      //
-      if (ok === false) {
-        return scaler.emit('error::validation', event, new Error('Failed to validate the data'));
+        return scaler.emit('error::validation', err, {
+          event: event,
+          raw: raw,
+          user: user
+        });
       }
 
       //
@@ -517,8 +530,8 @@ Scaler.prototype.validate = function validate(event, validator) {
       //
       data = data.slice(0, callbackargument);
       data.unshift('stream::'+ event);
-      data.push(user);
       data.push(raw);
+      data.push(user);
 
       scaler.emit.apply(scaler, data);
 
@@ -564,17 +577,25 @@ Scaler.prototype.connection = function connection(socket) {
   // Parse messages.
   //
   socket.on('message', function preparser(raw) {
-    var data;
+    var data, emitted;
 
     try { data = scaler.decode(raw); }
-    catch (e) { return scaler.emit('error::json', e, user, raw); }
+    catch (e) {
+      return scaler.emit('error::invalid', e, {
+        raw: raw,
+        user: user
+      });
+    }
 
     //
     // The received data should be either be an Object or Array, JSON does
     // support strings and numbers but we don't want those :).
     //
     if ('object' !== typeof data) {
-      return scaler.emit('error::invalid', new Error('Not an object'), user, raw);
+      return scaler.emit('error::invalid', new Error('Not an object'), {
+        raw: raw,
+        user: user
+      });
     }
 
     //
@@ -590,10 +611,18 @@ Scaler.prototype.connection = function connection(socket) {
       data.args.push(raw);
 
       if (!scaler.emit.apply(scaler, data.args)) {
-        scaler.emit('error::validation', new Error('Validator missing'), user, data.event);
+        scaler.emit('error::validation', new Error('Validator missing'), {
+          event: data.event,
+          raw: raw,
+          user: user
+        });
       }
     } else if (!scaler.emit('validate::message', data, user, raw)) {
-      scaler.emit('error::validation', new Error('Validator missing'), user, 'message');
+      scaler.emit('error::validation', new Error('Validator missing'), {
+        event: 'message',
+        raw: raw,
+        user: user
+      });
     }
   });
 

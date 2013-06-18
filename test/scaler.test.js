@@ -282,11 +282,11 @@ describe('scaler', function () {
 
       scale.connect('foo', 'bar', 'banana');
 
-      scale.on('error::connect', function error(err, key, value) {
+      scale.on('error::connect', function error(err, context) {
         expect(err).to.be.instanceOf(Error);
         expect(err.message).to.contain('integer');
-        expect(key).to.equal('ff::foo::bar');
-        expect(value).to.equal('http://localhost@banana');
+        expect(context.key).to.equal('ff::foo::bar');
+        expect(context.value).to.equal('http://localhost@banana');
 
         done();
       });
@@ -397,11 +397,11 @@ describe('scaler', function () {
     it('receives unicode correctly');
 
     it('emits error::invalid on parse error', function (done) {
-      server.once('error::invalid', function (err, message) {
+      server.once('error::invalid', function (err, context) {
         expect(err).to.be.instanceOf(Error);
 
-        expect(message).to.be.a('string');
-        expect(message).to.equal('{json:foo}');
+        expect(context.raw).to.be.a('string');
+        expect(context.raw).to.equal('{json:foo}');
 
         done();
       });
@@ -429,11 +429,11 @@ describe('scaler', function () {
         function next() {
           var item = items.pop();
 
-          server.once('error::invalid', function (err, message) {
+          server.once('error::invalid', function (err, context) {
             expect(err).to.be.instanceOf(Error);
 
-            expect(message).to.be.a('string');
-            expect(message).to.equal(JSON.stringify(item.json));
+            expect(context.raw).to.be.a('string');
+            expect(context.raw).to.equal(JSON.stringify(item.json));
 
             if (++completed === complete) return done();
             next();
@@ -577,8 +577,10 @@ describe('scaler', function () {
         cb(undefined, false);
       });
 
-      scale.once('error::validation', function validate(event, err) {
-        expect(event).to.equal('foo');
+      scale.once('error::validation', function validate(err, context) {
+        expect(context.event).to.equal('foo');
+        expect(context.user).to.be.instanceOf(User);
+
         expect(err).to.be.instanceOf(Error);
         expect(err.message).to.equal('Failed to validate the data');
 
@@ -600,8 +602,10 @@ describe('scaler', function () {
         cb(new Error('Failed to validate'));
       });
 
-      scale.once('error::validation', function validate(event, err) {
-        expect(event).to.equal('foo');
+      scale.once('error::validation', function validate(err, context) {
+        expect(context.event).to.equal('foo');
+        expect(context.user).to.be.instanceOf(User);
+
         expect(err).to.be.instanceOf(Error);
         expect(err.message).to.equal('Failed to validate');
 
