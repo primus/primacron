@@ -45,13 +45,13 @@ describe('scaler', function () {
     var scale = new Scaler(null, {
       broadcast: '/foo/broadcast',
       endpoint: '/foo/endpoint',
-      service: 'http://google.com',
+      redirect: 'http://google.com',
       namespace: 'cows'
     });
 
     expect(scale.broadcast.toString()).to.equal('/foo/broadcast');
     expect(scale.endpoint.toString()).to.equal('/foo/endpoint');
-    expect(scale.service).to.equal('http://google.com');
+    expect(scale.redirect).to.equal('http://google.com');
     expect(scale.namespace).to.equal('cows');
   });
 
@@ -157,8 +157,8 @@ describe('scaler', function () {
       });
     });
 
-    it('redirects to the given service', function (done) {
-      var scaler = new Scaler(null, { service: 'http://google.com' });
+    it('redirects to the given redirect', function (done) {
+      var scaler = new Scaler(null, { redirect: 'http://google.com' });
 
       scaler.listen(++portnumbers, function () {
         request({

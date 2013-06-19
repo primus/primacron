@@ -55,7 +55,7 @@ var Scaler = module.exports = function Scaler(redis, options) {
   this.redis = redis || require('redis').createClient();
 
   // The root domain of the service, will be used for redirects.
-  this.service = options.service || false;
+  this.redirect = options.redirect || false;
 
   // The namespace for the keys that are stored in redis.
   this.namespace = options.namespace || 'scaler';
@@ -220,11 +220,11 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
   //
   // This is an unknown request, let's just assume that this user is just
   // exploring our server with the best intentions and redirect him to the
-  // service domain.
+  // redirection domain.
   //
-  if (this.service) {
+  if (this.redirect) {
     res.statusCode = 301;
-    res.setHeader('Location', this.service);
+    res.setHeader('Location', this.redirect);
     return res.end('');
   }
 
