@@ -64,7 +64,7 @@ var Scaler = module.exports = function Scaler(redis, options) {
   this.timeout = options.timeout || 60 * 15;
 
   // The network address this server is approachable on for internal HTTP requests.
-  this.address = options.address || 'localhost';
+  this.networkaddress = options.address || 'localhost';
 
   // The port number that we should use to connect with this server.
   this.port = options.port || null;
@@ -99,7 +99,7 @@ Scaler.prototype.__proto__ = require('events').EventEmitter.prototype;
 //
 Object.defineProperty(Scaler.prototype, 'uri', {
   get: function get() {
-    return 'http://'+ [this.address, this.port].filter(Boolean).join(':');
+    return 'http://'+ [this.networkaddress, this.port].filter(Boolean).join(':');
   }
 });
 
@@ -242,7 +242,7 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
  * @api public
  */
 Scaler.prototype.network = function network(address, port) {
-  if (address) this.address = address;
+  if (address) this.networkaddress = address;
   if (port) this.port = port;
 
   return this;
@@ -804,6 +804,17 @@ Scaler.prototype.listen = function listen() {
 
   return this;
 };
+
+//
+// Add missing methods of a regular HTTP server that we can proxy from our
+// internal `this.server` instance.
+//
+['address'].forEach(function missing(method) {
+  Scaler.prototype[method] = function proxy() {
+    this.server[method].apply(this.server, arguments);
+    return this;
+  };
+});
 
 /**
  * Create a new server.

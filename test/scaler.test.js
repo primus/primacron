@@ -202,24 +202,24 @@ describe('scaler', function () {
     it('sets the address', function () {
       var scale = new Scaler();
 
-      expect(scale.address).to.equal('localhost');
+      expect(scale.networkaddress).to.equal('localhost');
       expect(scale.port).to.equal(null);
 
       scale.network('127.0.0.1');
 
-      expect(scale.address).to.equal('127.0.0.1');
+      expect(scale.networkaddress).to.equal('127.0.0.1');
       expect(scale.port).to.equal(null);
     });
 
     it('sets the port', function () {
       var scale = new Scaler();
 
-      expect(scale.address).to.equal('localhost');
+      expect(scale.networkaddress).to.equal('localhost');
       expect(scale.port).to.equal(null);
 
       scale.network('127.0.0.1', 2456);
 
-      expect(scale.address).to.equal('127.0.0.1');
+      expect(scale.networkaddress).to.equal('127.0.0.1');
       expect(scale.port).to.equal(2456);
     });
 
