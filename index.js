@@ -196,7 +196,17 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
     && this.endpoint === req.uri.pathname
     && 'account' in req.query
   ) {
-    if (websocket) return this.engine.handleUpgrade(req, res, head);
+    if (websocket) {
+      //
+      // Copy buffer to prevent large buffer retention in Node core.
+      // @see jmatthewsr-ms/node-slab-memory-issues
+      //
+      var upgrade = new Buffer(head.length);
+      head.copy(upgrade);
+
+      return this.engine.handleUpgrade(req, res, upgrade);
+    }
+
     return this.engine.handleRequest(req, res);
   } else if (websocket) {
     //
