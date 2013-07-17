@@ -1,7 +1,7 @@
 {
-  "name": "scaler",
+  "name": "primacron",
   "version": "0.0.0",
-  "description": "Scalable API wrapper for Engine.IO",
+  "description": "Primacron is a high level abstraction build on top of Primus",
   "main": "index.js",
   "scripts": {
     "test": "NODE_ENV=testing ./node_modules/.bin/mocha $(find test -name '*.test.js')"
@@ -11,13 +11,13 @@
     "url": "git://github.com/observing/scaler.git"
   },
   "keywords": [
-    "Primus",
+    "Primacron",
     "Real-time",
-    "scaling"
+    "Primus",
+    "Scaling"
   ],
   "author": "Arnout Kazemier <arnout@observe.it>",
-  "license": "Closed Source",
-  "private": true,
+  "license": "MIT",
   "dependencies": {
     "primus": "git://github.com/3rd-Eden/primus.git#master",
     "request": "2.21.x",
