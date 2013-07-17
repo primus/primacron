@@ -1,16 +1,16 @@
 'use strict';
 
-var Engine = require('engine.io').Server
-  , Socket = require('engine.io').Socket
-  , parser = require('url').parse
+var parser = require('url').parse
   , request = require('request')
+  , Primus = require('primus')
   , async = require('async');
 
 //
 // Cached prototypes to speed up lookups.
 //
 var toString = Object.prototype.toString
-  , slice = Array.prototype.slice;
+  , slice = Array.prototype.slice
+  , undefined;
 
 //
 // Noop function.
@@ -33,15 +33,15 @@ function User(account, session, id) {
 }
 
 /**
- * Create a new Scaler instance.
+ * Create a new Primacron instance.
  *
  * @constructor
  * @param {Redis} redis A Redis client.
- * @param {Object} options Scaler options.
+ * @param {Object} options Primacron options.
  * @api public
  */
-var Scaler = module.exports = function Scaler(redis, options) {
-  if (!(this instanceof Scaler)) return new Scaler(redis, options);
+var Primacron = module.exports = function Primacron(redis, options) {
+  if (!(this instanceof Primacron)) return new Primacron(redis, options);
 
   options = options || {};
 
@@ -58,7 +58,7 @@ var Scaler = module.exports = function Scaler(redis, options) {
   this.redirect = options.redirect || false;
 
   // The namespace for the keys that are stored in redis.
-  this.namespace = options.namespace || 'scaler';
+  this.namespace = options.namespace || 'primacron';
 
   // How long do we maintain state from a single user (in seconds).
   this.timeout = options.timeout || 60 * 15;
@@ -69,18 +69,17 @@ var Scaler = module.exports = function Scaler(redis, options) {
   // The port number that we should use to connect with this server.
   this.port = options.port || null;
 
-  //
-  // Allow custom encoders and decoders, we default to JSON.parse so it should
-  // have simular interfaces.
-  //
-  this.encode = options.encode || JSON.stringify;
-  this.decode = options.decode || JSON.parse;
+  // The transformer we need to use for a real-time connection.
+  this.transformer = options.transformer || 'engine.io';
+
+  // The parser we need to use for real-time communication.
+  this.parser = options.parser || 'json';
 
   //
   // These properies will be set once we're initialized.
   //
+  this.primus = null;         // Primus server instance.
   this.server = null;         // HTTP server instance.
-  this.engine = null;         // Engine.IO server.
 
   //
   // Stores `sockets` by created session ids.
@@ -89,15 +88,15 @@ var Scaler = module.exports = function Scaler(redis, options) {
 };
 
 //
-// The scaler inherits from the EventEmitter so we can savely emit events
+// The primacron inherits from the EventEmitter so we can savely emit events
 // without creating tail recursion.
 //
-Scaler.prototype.__proto__ = require('events').EventEmitter.prototype;
+Primacron.prototype.__proto__ = require('events').EventEmitter.prototype;
 
 //
 // Because we are to lazy to combine address + port every single time.
 //
-Object.defineProperty(Scaler.prototype, 'uri', {
+Object.defineProperty(Primacron.prototype, 'uri', {
   get: function get() {
     return 'http://'+ [this.networkaddress, this.port].filter(Boolean).join(':');
   }
@@ -106,14 +105,15 @@ Object.defineProperty(Scaler.prototype, 'uri', {
 //
 // Expose the version number.
 //
-Scaler.prototype.version = require('./package.json').version;
+Primacron.prototype.version = require('./package.json').version;
 
 /**
  * Add a new custom session id generator.
  *
+ * @param {Function} generator A custom generator for unique ids.
  * @api public
  */
-Scaler.prototype.uuid = function uuid(generator) {
+Primacron.prototype.uuid = function uuid(generator) {
   this.generator = generator;
   return this;
 };
@@ -121,11 +121,11 @@ Scaler.prototype.uuid = function uuid(generator) {
 /**
  * A simple persistent session generator.
  *
- * @param {Socket} socket Engine.IO socket
- * @param {Function} fn Callback
+ * @param {Socket} spark Primus Spark.
+ * @param {Function} fn Callback.
  * @api private
  */
-Scaler.prototype.generator = function generator(socket, fn) {
+Primacron.prototype.generator = function generator(spark, fn) {
   fn(undefined, [1, 1, 1, 1].map(function generator() {
     return Math.random().toString(36).substring(2).toUpperCase();
   }).join('-'));
@@ -135,12 +135,12 @@ Scaler.prototype.generator = function generator(socket, fn) {
  * Simple Engine.io onOpen method handler so we can add data to the handshake.
  *
  * @see 3rd-Eden/engine.io/commit/627fa5b4e794a5c624447bde34ce8ef284a6ba00
- * @param {Socket} socket Engine.IO socket
+ * @param {Socket} socket Engine.IO socket.
  * @param {Function} fn Callback.
  * @api private
  */
-Scaler.prototype.initialise = function initialise(socket, fn) {
-  var scaler = this;
+Primacron.prototype.initialise = function initialise(socket, fn) {
+  var primacron = this;
 
   //
   // This horrible next tick is required to make a socket.request.query access
@@ -155,7 +155,7 @@ Scaler.prototype.initialise = function initialise(socket, fn) {
       //
       // 1: Generate a session id.
       //
-      scaler.generator.bind(this, socket),
+      primacron.generator.bind(this, socket),
 
       //
       // 2: Add the session, account and id so we can find this user back.
@@ -168,7 +168,11 @@ Scaler.prototype.initialise = function initialise(socket, fn) {
         //
         socket.request.query.session = data;
 
-        scaler.connect(account, data, socket.id, function (err, members) {
+        //
+        // Primus is using the same socket.id as id for the spark connection so
+        // we can savely store that.
+        //
+        primacron.connect(account, data, socket.id, function (err, members) {
           if (!err) socket.tail = members;
 
           return next(err, { session: data, account: account });
@@ -181,41 +185,11 @@ Scaler.prototype.initialise = function initialise(socket, fn) {
 /**
  * Intercept HTTP requests and handle them accordingly.
  *
- * @param {Boolean} websocket This is a WebSocket request
  * @param {Request} req HTTP request instance.
  * @param {Response} res HTTP response instance.
- * @param {Buffer} head HTTP head buffer.
  * @api private
  */
-Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
-  req.uri = req.uri || parser(req.url, true);
-  req.query = req.query || req.uri.query;
-
-  if (
-       this.engine
-    && this.endpoint === req.uri.pathname
-    && 'account' in req.query
-  ) {
-    if (websocket) {
-      //
-      // Copy buffer to prevent large buffer retention in Node core.
-      // @see jmatthewsr-ms/node-slab-memory-issues
-      //
-      var upgrade = new Buffer(head.length);
-      head.copy(upgrade);
-
-      return this.engine.handleUpgrade(req, res, upgrade);
-    }
-
-    return this.engine.handleRequest(req, res);
-  } else if (websocket) {
-    //
-    // We cannot do fancy pancy redirection for WebSocket calls. So instead we
-    // should just close the connecting socket.
-    //
-    return res.end();
-  }
-
+Primacron.prototype.intercept = function intercept(req, res) {
   if (
        'put' === (req.method || '').toLowerCase()
     && this.broadcast === req.uri.pathname
@@ -223,7 +197,7 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
     //
     // Add some identifying headers.
     //
-    res.setHeader('X-Powered-By', 'Scaler/v'+ this.version);
+    res.setHeader('X-Powered-By', 'Primacron/v'+ this.version);
     return this.incoming(req, res);
   }
 
@@ -247,11 +221,11 @@ Scaler.prototype.intercept = function intercept(websocket, req, res, head) {
 /**
  * Set the network address where this server is accessible on.
  *
- * @param {String} address Network address
- * @param {String} port The port number
+ * @param {String} address Network address.
+ * @param {String} port The port number.
  * @api public
  */
-Scaler.prototype.network = function network(address, port) {
+Primacron.prototype.network = function network(address, port) {
   if (address) this.networkaddress = address;
   if (port) this.port = port;
 
@@ -262,10 +236,10 @@ Scaler.prototype.network = function network(address, port) {
  * Find the socket by session id.
  *
  * @param {String} session The session id we want to find.
- * @returns {Socket} The matching engine.io socket
+ * @returns {Socket} The matching Primus spark.
  * @api private
  */
-Scaler.prototype.socket = function socket(session) {
+Primacron.prototype.socket = function socket(session) {
   return this.sockets[session];
 };
 
@@ -278,10 +252,10 @@ Scaler.prototype.socket = function socket(session) {
  * @param {Function} fn Optional callback.
  * @api private
  */
-Scaler.prototype.connect = function connect(account, session, id, fn) {
+Primacron.prototype.connect = function connect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
     , value = this.uri +'@'+ id
-    , scaler = this;
+    , primacron = this;
 
   this.redis.multi()
     .setex(key, this.timeout, value)    // Save our update location.
@@ -301,7 +275,7 @@ Scaler.prototype.connect = function connect(account, session, id, fn) {
     });
 
     if (fn) fn.call(this, err, replies[1]);
-    if (err) return scaler.emit('error::connect', err, {
+    if (err) return primacron.emit('error::connect', err, {
       key: key,
       value: value
     });
@@ -318,14 +292,14 @@ Scaler.prototype.connect = function connect(account, session, id, fn) {
  * @param {String} id Connection id.
  * @param {Function} fn Optional callback.
  */
-Scaler.prototype.disconnect = function disconnect(account, session, id, fn) {
+Primacron.prototype.disconnect = function disconnect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
     , value = this.uri +'@'+ id
-    , scaler = this;
+    , primacron = this;
 
   this.redis.del(key, function del(err) {
     if (fn) fn.apply(this, arguments);
-    if (err) return scaler.emit('error::disconnect', err, {
+    if (err) return primacron.emit('error::disconnect', err, {
       key: key,
       value: value
     });
@@ -342,7 +316,7 @@ Scaler.prototype.disconnect = function disconnect(account, session, id, fn) {
  * @param {Function} fn Callback.
  * @api private
  */
-Scaler.prototype.find = function find(account, session, fn) {
+Primacron.prototype.find = function find(account, session, fn) {
   var key = this.namespace +'::'+ account +'::'+ session;
 
   this.redis.get(key, function parse(err, data) {
@@ -367,13 +341,13 @@ Scaler.prototype.find = function find(account, session, fn) {
  * @param {Function} fn Callback.
  * @api public
  */
-Scaler.prototype.forward = function forward(account, session, message, fn) {
-  var scaler = this;
+Primacron.prototype.forward = function forward(account, session, message, fn) {
+  var primacron = this;
 
   return this.find(account, session, function found(err, server, id) {
     if (err || !server) return fn(err || new Error('Unknown session id '+ session));
 
-    scaler.communicate(server, id, message, fn);
+    primacron.communicate(server, id, message, fn);
   });
 };
 
@@ -386,7 +360,7 @@ Scaler.prototype.forward = function forward(account, session, message, fn) {
  * @param {Function} fn Callback
  * @api private
  */
-Scaler.prototype.communicate = function communicate(server, id, message, fn) {
+Primacron.prototype.communicate = function communicate(server, id, message, fn) {
   request({
     uri: server + this.broadcast,
     method: 'PUT',
@@ -419,27 +393,27 @@ Scaler.prototype.communicate = function communicate(server, id, message, fn) {
  * TODO: As we are following socket, we probably need to mark this socket as
  * `tail` as well..
  *
- * @param {Socket} socket The Engine.IO socket that want's to follow a user.
+ * @param {Socket} socket The socket that wan'ts to follow an account.
  * @param {String} account Account id.
  * @param {String} session Session id.
  * @param {Function} fn Callback.
  * @api public
  */
-Scaler.prototype.pipe = function pipe(socket, account, session, fn) {
+Primacron.prototype.pipe = function pipe(socket, account, session, fn) {
   fn = fn || noop;
 
-  if (account !== socket.request.query.account) {
+  if (account !== socket.query.account) {
     return fn(new Error('Cannot follow other accounts'));
   }
 
   var key = this.namespace +'::'+ account +'::'+ session +'::pipe'
     , value = this.uri +'@'+ socket.id
-    , scaler = this;
+    , primacron = this;
 
   this.redis.sadd(key, value, function follow(err) {
     if (err) return fn(err);
 
-    scaler.forward(account, session, [ value ], fn);
+    primacron.forward(account, session, [ value ], fn);
   });
 
   return this;
@@ -452,8 +426,8 @@ Scaler.prototype.pipe = function pipe(socket, account, session, fn) {
  * @param {Respone} res HTTP Response instance.
  * @api private
  */
-Scaler.prototype.incoming = function incoming(req, res) {
-  var scaler = this
+Primacron.prototype.incoming = function incoming(req, res) {
+  var primacron = this
     , buff = '';
 
   //
@@ -465,10 +439,10 @@ Scaler.prototype.incoming = function incoming(req, res) {
   req.once('end', function end() {
     var data;
 
-    try { data = scaler.decode(buff); }
+    try { data = primacron.decode(buff); }
     catch (e) {
-      scaler.end('broken', res);
-      return scaler.emit('error::invalid', e, {
+      primacron.end('broken', res);
+      return primacron.emit('error::invalid', e, {
         raw: buff,
         request: req
       });
@@ -479,8 +453,8 @@ Scaler.prototype.incoming = function incoming(req, res) {
       || Array.isArray(data)                    // Not an array..
       || !('message' in data && 'id' in data)   // And have the required fields.
     ) {
-      scaler.end('invalid', res);
-      return scaler.emit('error::invalid', new Error('Invalid packet received'), {
+      primacron.end('invalid', res);
+      return primacron.emit('error::invalid', new Error('Invalid packet received'), {
         raw: buff,
         request: req
       });
@@ -489,32 +463,32 @@ Scaler.prototype.incoming = function incoming(req, res) {
     //
     // Try to find the connected socket on our server.
     //
-    if (!(data.id in scaler.engine.clients)) {
-      return scaler.end('unknown socket', res);
+    if (!(data.id in primacron.primus.connections)) {
+      return primacron.end('unknown socket', res);
     }
 
     //
     // Write the message to the client.
     //
-    var socket = scaler.engine.clients[data.id];
+    var socket = primacron.primus.connections[data.id];
 
     //
     // Determin how we should handle this message.
     //
     switch (toString.call(data.message).slice(8, -1)) {
       case 'String':
-        socket.emit('scaler::pipe', data.message);
+        socket.emit('primacron::pipe', data.message);
       break;
 
       case 'Array':
-        socket.emit('scaler::tail', data.message);
+        socket.emit('primacron::tail', data.message);
       break;
 
       default:
-        socket.emit('scaler', data.message);
+        socket.emit('primacron', data.message);
     }
 
-    scaler.end('sending', res);
+    primacron.end('sending', res);
   });
 
   return this;
@@ -528,9 +502,9 @@ Scaler.prototype.incoming = function incoming(req, res) {
  * @param {Function} validator The validation function.
  * @api public
  */
-Scaler.prototype.validate = function validate(event, validator) {
+Primacron.prototype.validate = function validate(event, validator) {
   var callbackargument = validator.length - 1
-    , scaler = this;
+    , primacron = this;
 
   return this.on('validate::'+ event, function validating() {
     var data = slice.call(arguments, 0)
@@ -546,7 +520,7 @@ Scaler.prototype.validate = function validate(event, validator) {
       if (err || ok === false) {
         err = err || new Error('Failed to validate the data');
 
-        return scaler.emit('error::validation', err, {
+        return primacron.emit('error::validation', err, {
           event: event,
           raw: raw,
           user: user
@@ -561,20 +535,20 @@ Scaler.prototype.validate = function validate(event, validator) {
       data.push(raw);
       data.push(user);
 
-      scaler.emit.apply(scaler, data);
+      primacron.emit.apply(primacron, data);
 
       //
       // Now that everything is validated, we are going to check if we have any
       // socket tail's who want to receive this data.
       //
-      if (!scaler.engine || !(user.id in scaler.engine.clients)) return;
-      var socket = scaler.engine.clients[user.id];
+      if (!primacron.primus || !(user.id in primacron.primus.connections)) return;
+      var socket = primacron.primus.connections[user.id];
 
       socket.tail.forEach(function tail(gator) {
         if (!gator) return;
 
         var data = gator.split('@');
-        scaler.communicate(data[0], data[1], raw, noop);
+        primacron.communicate(data[0], data[1], raw, noop);
       });
     };
 
@@ -583,16 +557,16 @@ Scaler.prototype.validate = function validate(event, validator) {
 };
 
 /**
- * A new Engine.IO request has been received.
+ * A new Primus connection.
  *
- * @param {Socket} socket Engine.io socket
+ * @param {Spark} spark The primus spark.
  * @api private
  */
-Scaler.prototype.connection = function connection(socket) {
-  var session = socket.request.query.session
-    , account = socket.request.query.account
-    , id = socket.id
-    , scaler = this
+Primacron.prototype.connection = function connection(spark) {
+  var session = spark.query.session
+    , account = spark.query.account
+    , primacron = this
+    , id = spark.id
     , user;
 
   //
@@ -604,30 +578,22 @@ Scaler.prototype.connection = function connection(socket) {
   //
   // Store a reference for the socket.
   //
-  this.sockets[session] = socket;
+  this.sockets[session] = spark;
 
   //
   // Parse messages.
   //
-  socket.on('message', function preparser(raw) {
-    var data, emitted;
-
-    try { data = scaler.decode(raw); }
-    catch (e) {
-      return scaler.emit('error::invalid', e, {
-        raw: raw,
-        user: user
-      });
-    }
+  spark.on('data', function preparser(data, raw) {
+    var emitted;
 
     //
     // The received data should be either be an Object or Array, JSON does
     // support strings and numbers but we don't want those :).
     //
     if ('object' !== typeof data) {
-      return scaler.emit('error::invalid', new Error('Not an object'), {
-        raw: raw,
-        user: user
+      return primacron.emit('error::invalid', new Error('Not an object'), {
+        user: user,
+        raw: raw
       });
     }
 
@@ -643,18 +609,18 @@ Scaler.prototype.connection = function connection(socket) {
       data.args.push(user);
       data.args.push(raw);
 
-      if (!scaler.emit.apply(scaler, data.args)) {
-        scaler.emit('error::validation', new Error('Validator missing'), {
+      if (!primacron.emit.apply(primacron, data.args)) {
+        primacron.emit('error::validation', new Error('Validator missing'), {
           event: data.event,
-          raw: raw,
-          user: user
+          user: user,
+          raw: raw
         });
       }
-    } else if (!scaler.emit('validate::message', data, user, raw)) {
-      scaler.emit('error::validation', new Error('Validator missing'), {
-        event: 'message',
-        raw: raw,
-        user: user
+    } else if (!primacron.emit('validate::message', data, user, raw)) {
+      primacron.emit('error::validation', new Error('Validator missing'), {
+        event: 'data',
+        user: user,
+        raw: raw
       });
     }
   });
@@ -662,42 +628,42 @@ Scaler.prototype.connection = function connection(socket) {
   //
   // Listen for external requests.
   //
-  socket.on('scaler::pipe', function pipe(data) {
-    if ('string' !== typeof data) data = scaler.encode(data);
+  spark.on('primacron::pipe', function pipe(data) {
+    if ('string' !== typeof data) data = primacron.encode(data);
 
-    socket.write(data);
+    spark.write(data);
   });
 
   //
   // Listen for new followers
   //
-  socket.on('scaler::tail', function tail(members) {
+  spark.on('primacron::tail', function tail(members) {
     members.forEach(function follower(member) {
-      if (~socket.tail.indexOf(member)) return;
+      if (~spark.tail.indexOf(member)) return;
 
-      socket.tail.push(member);
+      spark.tail.push(member);
     });
   });
 
   //
   // Clean up the socket connection. Remove all listeners.
   //
-  socket.once('close', function disconnect() {
-    scaler.disconnect(account, session, id);
-    delete scaler.sockets[session];
-    socket.removeAllListeners();
+  spark.once('end', function disconnect() {
+    primacron.disconnect(account, session, id);
+    delete primacron.sockets[session];
+    spark.removeAllListeners();
   });
 };
 
 /**
- * Proxy events from Engine.IO or the HTTP server directly to our Scaler
+ * Proxy events from Engine.IO or the HTTP server directly to our Primacron
  * instance. This is done without throwing errors because we check beforehand if
  * there are listeners attached for the given event before we emit it.
  *
  * @param {String} event Name of the event we are emitting.
  * @api private
  */
-Scaler.prototype.proxy = function proxy(event) {
+Primacron.prototype.proxy = function proxy(event) {
   var listeners = this.listeners(event) || [];
 
   if (listeners.length) this.emit.apply(this, arguments);
@@ -711,8 +677,8 @@ Scaler.prototype.proxy = function proxy(event) {
  * @returns {Buffer} Pre compiled response buffer.
  * @api private
  */
-Scaler.prototype.end = function end(type, res) {
-  var compiled = Scaler.prototype.end
+Primacron.prototype.end = function end(type, res) {
+  var compiled = Primacron.prototype.end
     , msg = compiled[type] || compiled['bad request'];
 
   if (!res) return msg;
@@ -725,7 +691,9 @@ Scaler.prototype.end = function end(type, res) {
 };
 
 //
-// Generate the default responses.
+// Generate the default responses, they are stored in Buffers to reduce
+// pointless stringify operations. The document is stored as a backup so we can
+// retrieve the statusCode and correctly answer the request.
 //
 [
   {
@@ -746,31 +714,31 @@ Scaler.prototype.end = function end(type, res) {
   {
     status: 404,
     type: 'unknown socket',
-    description: 'The requested socket was not found.'
+    description: 'The requested spark was not found.'
   },
   {
     status: 200,
     type: 'sending',
-    description: 'Sending the message to the socket'
+    description: 'Sending the message to the spark.'
   }
 ].forEach(function precompile(document) {
-  Scaler.prototype.end[document.type] = new Buffer(JSON.stringify(document));
-  Scaler.prototype.end[document.type].json = document;
+  Primacron.prototype.end[document.type] = new Buffer(JSON.stringify(document));
+  Primacron.prototype.end[document.type].json = document;
 });
 
 /**
- * Destroy the scaler server and clean up all it's references.
+ * Destroy the primacron server and clean up all it's references.
  *
  * @api public
  */
-Scaler.prototype.destroy = function destroy(fn) {
-  var scaler = this;
+Primacron.prototype.destroy = function destroy(fn) {
+  var primacron = this;
 
   this.server.removeAllListeners('request');
-  this.engine.removeAllListeners('connection');
+  this.primus.removeAllListeners('connection');
   this.server.close(function closed() {
-    scaler.redis.end();
-    scaler.server.removeAllListeners('error');
+    primacron.redis.end();
+    primacron.server.removeAllListeners('error');
 
     (fn || noop).apply(this, arguments);
   });
@@ -784,28 +752,31 @@ Scaler.prototype.destroy = function destroy(fn) {
  *
  * @api public
  */
-Scaler.prototype.listen = function listen() {
+Primacron.prototype.listen = function listen() {
   var args = slice.call(arguments, 0)
     , port = +args[0];
-
-  //
-  // Setup the real-time engine.
-  //
-  this.engine = new Engine();
-  this.engine.onOpen = this.initialise.bind(this);
-  this.engine.on('connection', this.connection.bind(this));
 
   //
   // Create the HTTP server.
   //
   if (port) this.port = port;
-  this.server = require('http').createServer();
-  this.server.on('request', this.intercept.bind(this, false));
-  this.server.on('upgrade', this.intercept.bind(this, true));
 
+  this.server = require('http').createServer(this.intercept.bind(this));
   this.server.on('listening', this.proxy.bind(this, 'listening'));
   this.server.on('error', this.proxy.bind(this, 'error'));
   this.server.on('close', this.proxy.bind(this, 'close'));
+
+  //
+  // Setup the real-time engine.
+  //
+  this.primus = new Primus(this.server, {
+    transformer: this.transformer,
+    pathname: this.endpoint,
+    parser: this.parser
+  });
+
+  //this.engine.onOpen = this.initialise.bind(this);
+  this.primus.on('connection', this.connection.bind(this));
 
   //
   // Proxy all arguments to the server.
@@ -820,7 +791,7 @@ Scaler.prototype.listen = function listen() {
 // internal `this.server` instance.
 //
 ['address'].forEach(function missing(method) {
-  Scaler.prototype[method] = function proxy() {
+  Primacron.prototype[method] = function proxy() {
     this.server[method].apply(this.server, arguments);
     return this;
   };
@@ -832,39 +803,11 @@ Scaler.prototype.listen = function listen() {
  * @param {
  * @api public
  */
-Scaler.createServer = function createServer(redis, options) {
-  return new Scaler(redis, options);
+Primacron.createServer = function createServer(redis, options) {
+  return new Primacron(redis, options);
 };
 
 //
 // Expose the User object.
 //
-Scaler.User = User;
-
-//
-// !!! IMPORTANT !!!
-// Some extensions to the Engine.IO Socket that would make it easier to
-// communicate with the connected clients.
-// !!! IMPORTANT !!!
-//
-
-/**
- * Stores a list of connections that tailing our every message.
- *
- * @type {Array}
- * @private
- */
-Socket.prototype.tail = [];
-
-/**
- * Emit an event.
- *
- * @param {String} name The event name.
- * @api public
- */
-Socket.prototype.event = function event(name) {
-  this.write(this.encode({
-    event: event,
-    args: slice.call(arguments, 1)
-  }));
-};
+Primacron.User = User;

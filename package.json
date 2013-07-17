@@ -11,7 +11,7 @@
     "url": "git://github.com/observing/scaler.git"
   },
   "keywords": [
-    "Engine.IO",
+    "Primus",
     "Real-time",
     "scaling"
   ],
@@ -19,7 +19,7 @@
   "license": "Closed Source",
   "private": true,
   "dependencies": {
-    "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
+    "primus": "git://github.com/3rd-Eden/primus.git#master",
     "request": "2.21.x",
     "async": "~0.2.9"
   },
@@ -28,7 +28,6 @@
     "chai": "1.6.x",
     "pre-commit": "0.0.3",
     "redis": "0.8.3",
-    "engine.io-client": "git://github.com/LearnBoost/engine.io-client.git",
     "ws": "~0.4.25"
   }
 }
