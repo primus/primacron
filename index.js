@@ -775,6 +775,8 @@ Primacron.prototype.listen = function listen() {
     parser: this.parser
   });
 
+  this.primus.use('events', require('./plugins/events'));
+
   //this.engine.onOpen = this.initialise.bind(this);
   this.primus.on('connection', this.connection.bind(this));
 

@@ -19,15 +19,16 @@
   "author": "Arnout Kazemier <arnout@observe.it>",
   "license": "MIT",
   "dependencies": {
+    "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
     "primus": "git://github.com/3rd-Eden/primus.git#master",
     "request": "2.21.x",
-    "async": "~0.2.9"
+    "async": "0.2.x"
   },
   "devDependencies": {
     "mocha": "1.10.x",
     "chai": "1.6.x",
-    "pre-commit": "0.0.3",
-    "redis": "0.8.3",
-    "ws": "~0.4.25"
+    "pre-commit": "0.0.x",
+    "redis": "0.8.x",
+    "ws": "0.4.x"
   }
 }
