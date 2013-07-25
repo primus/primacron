@@ -16,7 +16,7 @@ describe('scaler', function () {
     , reds;
 
   //
-  // Include a stacktrace.
+  // Include a stack trace.
   //
   chai.Assertion.includeStack = true;
 
@@ -74,7 +74,7 @@ describe('scaler', function () {
     }
 
     it('generates a session', function (done) {
-      var socket = new Socket('id', server.engine, transporter());
+      var socket = new Socket('id', server.primus.transformer.service, transporter());
 
       server.initialise(socket, function initialise(err, data) {
         if (err) return done(err);
@@ -89,7 +89,7 @@ describe('scaler', function () {
     });
 
     it('adds tailgators to the socket object', function (done) {
-      var socket = new Socket('id', server.engine, transporter())
+      var socket = new Socket('id', server.primus.transformer.service, transporter())
         , ns = server.namespace +'::foo::sessionid::pipe';
 
       server.uuid(function uuid(socket, fn) {
@@ -379,7 +379,7 @@ describe('scaler', function () {
     }
 
     it('doesnt pipe to other accounts', function (done) {
-      var socket = new Socket('id', server.engine, transporter());
+      var socket = new Socket('id', server.primus.transformer.service, transporter());
 
       server.pipe(socket, 'bar', 'baz', function (err) {
         expect(err).to.be.instanceOf(Error);
