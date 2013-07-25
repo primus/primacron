@@ -51,13 +51,13 @@ var Primacron = module.exports = function Primacron(redis, options) {
   this.broadcast = options.broadcast || '/stream/broadcast';
   this.endpoint = options.endpoint || '/stream/';
 
-  // The redis client we need to keep connection state.
+  // The Redis client we need to keep connection state.
   this.redis = redis || require('redis').createClient();
 
   // The root domain of the service, will be used for redirects.
   this.redirect = options.redirect || false;
 
-  // The namespace for the keys that are stored in redis.
+  // The namespace for the keys that are stored in Redis.
   this.namespace = options.namespace || 'primacron';
 
   // How long do we maintain state from a single user (in seconds).
@@ -76,7 +76,7 @@ var Primacron = module.exports = function Primacron(redis, options) {
   this.parser = options.parser || 'json';
 
   //
-  // These properies will be set once we're initialized.
+  // These properties will be set once we're initialized.
   //
   this.primus = null;         // Primus server instance.
   this.server = null;         // HTTP server instance.
@@ -88,7 +88,7 @@ var Primacron = module.exports = function Primacron(redis, options) {
 };
 
 //
-// The primacron inherits from the EventEmitter so we can savely emit events
+// The Primacron inherits from the EventEmitter so we can safely emit events
 // without creating tail recursion.
 //
 Primacron.prototype.__proto__ = require('events').EventEmitter.prototype;
@@ -170,7 +170,7 @@ Primacron.prototype.initialise = function initialise(socket, fn) {
 
         //
         // Primus is using the same socket.id as id for the spark connection so
-        // we can savely store that.
+        // we can safely store that.
         //
         primacron.connect(account, data, socket.id, function (err, members) {
           if (!err) socket.tail = members;
@@ -213,7 +213,7 @@ Primacron.prototype.intercept = function intercept(req, res) {
   }
 
   //
-  // Well, fuck it, keeel it, with fire!
+  // Well, fuck it, kill it, with fire!
   //
   this.end('bad request', res);
 };
@@ -264,7 +264,7 @@ Primacron.prototype.connect = function connect(account, session, id, fn) {
     var data;
 
     //
-    // We need to "parse" the replies to determin if we actually received an
+    // We need to "parse" the replies to determine if we actually received an
     // error. Because this fucking pieces of shitty `node-redis` library doesn't
     // correctly parse error responses for MULTI/EXEC calls.
     //
@@ -381,7 +381,7 @@ Primacron.prototype.communicate = function communicate(server, id, message, fn) 
 
     //
     // We only have successfully send the message when we received
-    // a statusCode 200 from the targetted server.
+    // a statusCode 200 from the targeted server.
     //
     fn(undefined, body);
   });
@@ -393,7 +393,7 @@ Primacron.prototype.communicate = function communicate(server, id, message, fn) 
  * TODO: As we are following socket, we probably need to mark this socket as
  * `tail` as well..
  *
- * @param {Socket} socket The socket that wan'ts to follow an account.
+ * @param {Socket} socket The socket that wants to follow an account.
  * @param {String} account Account id.
  * @param {String} session Session id.
  * @param {Function} fn Callback.
@@ -431,7 +431,7 @@ Primacron.prototype.incoming = function incoming(req, res) {
     , buff = '';
 
   //
-  // Receive the data from the socket. the setEncoding ensures that unicode
+  // Receive the data from the socket. The `setEncoding` ensures that Unicode
   // chars are correctly buffered and parsed before the `data` event is emitted.
   //
   req.setEncoding('utf8');
@@ -473,7 +473,7 @@ Primacron.prototype.incoming = function incoming(req, res) {
     var socket = primacron.primus.connections[data.id];
 
     //
-    // Determin how we should handle this message.
+    // Determine how we should handle this message.
     //
     switch (toString.call(data.message).slice(8, -1)) {
       case 'String':
@@ -570,7 +570,7 @@ Primacron.prototype.connection = function connection(spark) {
     , user;
 
   //
-  // A simple user packet that would give un enough information on who the fuck
+  // A simple user packet that would give us enough information on who the fuck
   // the user is.
   //
   user = new User(account, session, id);
@@ -599,7 +599,7 @@ Primacron.prototype.connection = function connection(spark) {
 
     //
     // Check if the message was formatted as an event, if it is we need to
-    // prefix it with `stream:` to namespace the event and prevent collitions
+    // prefix it with `stream:` to namespace the event and prevent collisions
     // with other internal events. And this also ensures that we will not
     // override existing Engine.IO events and cause loops when an attacker
     // emits an `message` event.
@@ -727,7 +727,7 @@ Primacron.prototype.end = function end(type, res) {
 });
 
 /**
- * Destroy the primacron server and clean up all it's references.
+ * Destroy the Primacron server and clean up all it's references.
  *
  * @api public
  */
@@ -775,10 +775,10 @@ Primacron.prototype.listen = function listen() {
     parser: this.parser
   });
 
+  this.primus.transformer.service.onOpen = this.initialise.bind(this);
   this.primus.use('events', require('./plugins/events'));
-
-  //this.engine.onOpen = this.initialise.bind(this);
   this.primus.on('connection', this.connection.bind(this));
+  this.primus.save(__dirname +'/dist/primacon.js');
 
   //
   // Proxy all arguments to the server.
