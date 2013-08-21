@@ -2,9 +2,11 @@ describe('Primacron', function () {
   'use strict';
 
   var transport = require('engine.io').transports.polling
+    , EventEmitter = require('events').EventEmitter
     , Socket = require('engine.io').Socket
     , eio = require('engine.io-client')
     , request = require('request')
+    , Primus = require('primus')
     , Primacron = require('../')
     , redis = require('redis')
     , chai = require('chai')
@@ -370,7 +372,9 @@ describe('Primacron', function () {
     }
 
     it('doesnt pipe to other accounts', function (done) {
-      var socket = new Socket('id', server.primus.transformer.service, transporter());
+      var socket = new Primus.Spark(new EventEmitter, {}, {}, {
+        query: { account: 'foo' }
+      }, 'id');
 
       server.pipe(socket, 'bar', 'baz', function (err) {
         expect(err).to.be.instanceOf(Error);
