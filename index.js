@@ -48,7 +48,7 @@ var Primacron = module.exports = function Primacron(redis, options) {
   //
   // The HTTP routes that we should be listening on.
   //
-  this.broadcast = options.broadcast || '/stream/broadcast';
+  this.broadcast = options.broadcast || '/primacron/broadcast';
   this.endpoint = options.endpoint || '/stream/';
 
   // The Redis client we need to keep connection state.
@@ -291,6 +291,7 @@ Primacron.prototype.connect = function connect(account, session, id, fn) {
  * @param {String} session Session id.
  * @param {String} id Connection id.
  * @param {Function} fn Optional callback.
+ * @api private
  */
 Primacron.prototype.disconnect = function disconnect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
@@ -736,7 +737,7 @@ Primacron.prototype.destroy = function destroy(fn) {
 
   this.server.removeAllListeners('request');
   this.primus.removeAllListeners('connection');
-  this.server.close(function closed() {
+  this.primus.destroy(function destroy() {
     primacron.redis.end();
     primacron.server.removeAllListeners('error');
 
@@ -799,10 +800,21 @@ Primacron.prototype.listen = function listen() {
   };
 });
 
+//
+// Add missing methods of a Primus instance.
+//
+['use', 'library', 'save', 'transform'].forEach(function missing(method) {
+  Primacron.prototype[method] = function proxy() {
+    this.primus[method].apply(this.primus, arguments);
+    return this;
+  };
+});
+
 /**
  * Create a new server.
  *
- * @param {
+ * @param {Redis} redis A Redis client.
+ * @param {Object} options Configuration.
  * @api public
  */
 Primacron.createServer = function createServer(redis, options) {
