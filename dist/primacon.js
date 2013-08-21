@@ -7,6 +7,7 @@
     context[name] = definition();
   }
 })("Primus", this, function PRIMUS() {
+/*globals require, define */
 'use strict';
 
 /**
@@ -132,10 +133,10 @@ EventEmitter.prototype.removeAllListeners = function removeAllListeners(event) {
  *
  * Options:
  * - reconnect, configuration for the reconnect process.
- * - websockets, force the use of websockets, even when you should avoid them.
+ * - websockets, force the use of WebSockets, even when you should avoid them.
  *
  * @constructor
- * @param {String} url The url of your server.
+ * @param {String} url The URL of your server.
  * @param {Object} options The configuration.
  * @api private
  */
@@ -143,28 +144,58 @@ function Primus(url, options) {
   if (!(this instanceof Primus)) return new Primus(url);
 
   options = options || {};
+  var primus = this;
 
-  this.buffer = [];                       // Stores premature send data.
-  this.writable = true;                   // Silly stream compatibility.
-  this.readable = true;                   // Silly stream compatibility.
-  this.url = this.parse(url);             // Parse the url to a readable format.
-  this.backoff = options.reconnect || {}; // Stores the backoff configuration.
-  this.readyState = Primus.CLOSED;        // The readyState of the connection.
-  this.transformers = {                   // Message transformers.
+  this.buffer = [];                          // Stores premature send data.
+  this.writable = true;                      // Silly stream compatibility.
+  this.readable = true;                      // Silly stream compatibility.
+  this.url = this.parse(url);                // Parse the URL to a readable format.
+  this.backoff = options.reconnect || {};    // Stores the back off configuration.
+  this.attempt = null;                       // Current back off attempt.
+  this.readyState = Primus.CLOSED;           // The readyState of the connection.
+  this.transformers = {                      // Message transformers.
     outgoing: [],
     incoming: []
   };
 
-  // Initialize a stream interface, if we have any.
-  if (Stream) Stream.call(this);
-  else EventEmitter.call(this);
+  //
+  // Only initialise the EventEmitter interface if we're running in a plain
+  // browser environment. The Stream interface is inherited differently when it
+  // runs on browserify and on Node.js.
+  //
+  if (!Stream) EventEmitter.call(this);
 
+  //
   // Force the use of WebSockets, even when we've detected some potential
   // broken WebSocket implementation.
+  //
   if (options.websockets) this.AVOID_WEBSOCKETS = false;
 
-  this.initialise(options).open();
+  //
+  // Check if the user wants to manually initialise a connection. If they don't,
+  // we want to do it after a really small timeout so we give the users enough
+  // time to listen for `error` events etc.
+  //
+  if (!options.manual) setTimeout(function open() {
+    primus.open();
+  }, 0);
+
+  this.initialise(options);
 }
+
+/**
+ * Simple require wrapper to make browserify, node and require.js play nice.
+ *
+ * @param {String} name The module to require.
+ * @api private
+ */
+Primus.require = function requires(name) {
+  if ('function' !== typeof require) return undefined;
+
+  return !('function' === typeof define && define.amd)
+    ? require(name)
+    : undefined;
+};
 
 //
 // It's possible that we're running in Node.js or in a Node.js compatible
@@ -174,10 +205,18 @@ function Primus(url, options) {
 var Stream, parse;
 
 try {
-  parse = require('url').parse;
-  Stream = require('stream');
+  parse = Primus.require('url').parse;
+  Stream = Primus.require('stream');
 
-  Primus.prototype = new Stream();
+  //
+  // Normally inheritance is done in the same way as we do in our catch
+  // statement. But due to changes to the EventEmitter interface in Node 0.10
+  // this will trigger annoying memory leak warnings and other potential issues
+  // outlined in the issue linked below.
+  //
+  // @see https://github.com/joyent/node/issues/4971
+  //
+  Primus.require('util').inherits(Primus, Stream);
 } catch (e) {
   Primus.prototype = new EventEmitter();
 
@@ -189,6 +228,14 @@ try {
   parse = function parse(url) {
     var a = document.createElement('a');
     a.href = url;
+
+    //
+    // Browsers do not parse authorization information, so we need to extract
+    // that from the URL.
+    //
+    if (~a.href.indexOf('@') && !a.auth) {
+      a.auth = a.href.slice(a.protocol.length + 2, a.href.indexOf(a.pathname)).split('@')[0];
+    }
 
     return a;
   };
@@ -226,17 +273,44 @@ Primus.prototype.ark = {};
 /**
  * Initialise the Primus and setup all parsers and internal listeners.
  *
- * @param {Object} options The original object.
+ * @param {Object} options The original options object.
  * @api private
  */
 Primus.prototype.initialise = function initalise(options) {
   var primus = this;
 
-  this.on('outgoing::open', function opening() {
+  /**
+   * Start a new reconnect procedure.
+   *
+   * @api private
+   */
+  function reconnect() {
+    primus.attempt = primus.attempt || primus.clone(primus.backoff);
+
+    primus.reconnect(function reconnect(fail, backoff) {
+      // Save the opts again of this back off, so they re-used.
+      primus.attempt = backoff;
+
+      if (fail) {
+        primus.attempt = null;
+        return primus.emit('end');
+      }
+
+      //
+      // Try to re-open the connection again.
+      //
+      primus.emit('reconnect', backoff);
+      primus.emit('outgoing::reconnect');
+    }, primus.attempt);
+  }
+
+  primus.on('outgoing::open', function opening() {
     primus.readyState = Primus.OPENING;
   });
 
-  this.on('incoming::open', function opened() {
+  primus.on('incoming::open', function opened() {
+    if (primus.attempt) primus.attempt = null;
+
     primus.readyState = Primus.OPEN;
     primus.emit('open');
 
@@ -249,7 +323,17 @@ Primus.prototype.initialise = function initalise(options) {
     }
   });
 
-  this.on('incoming::data', function message(raw) {
+  primus.on('incoming::error', function error(e) {
+    //
+    // We're still doing a reconnect attempt, it could be that we failed to
+    // connect because the server was down. Failing connect attempts should
+    // always emit an `error` event instead of a `open` event.
+    //
+    if (primus.attempt) return reconnect();
+    if (primus.listeners('error').length) primus.emit('error', e);
+  });
+
+  primus.on('incoming::data', function message(raw) {
     primus.decoder(raw, function decoding(err, data) {
       //
       // Do a "save" emit('error') when we fail to parse a message. We don't
@@ -261,9 +345,7 @@ Primus.prototype.initialise = function initalise(options) {
       // The server is closing the connection, forcefully disconnect so we don't
       // reconnect again.
       //
-      if ('primus::server::close' === data) {
-        return primus.emit('incoming::end', data);
-      }
+      if ('primus::server::close' === data) return primus.end();
 
       var transform, result, packet;
       for (transform in primus.transformers.incoming) {
@@ -288,48 +370,47 @@ Primus.prototype.initialise = function initalise(options) {
     });
   });
 
-  this.on('incoming::end', function end(intentional) {
-    if (primus.readyState === Primus.CLOSED) return;
+  primus.on('incoming::end', function end(intentional) {
+    if (primus.readyState !== Primus.OPEN) return;
     primus.readyState = Primus.CLOSED;
 
     //
     // Some transformers emit garbage when they close the connection. Like the
-    // reason why it closed etc, we should explicitly check if WE send an
+    // reason why it closed etc. we should explicitly check if WE send an
     // intentional message.
     //
-    if ('primus::server::close' === intentional) return primus.emit('end');
+    if ('primus::server::close' === intentional) {
+      return primus.emit('end');
+    }
 
-    this.reconnect(function reconnect(fail, backoff) {
-      primus.backoff = backoff; // Save the opts again of this backoff.
-      if (fail) return primus.emit('end');
-
-      //
-      // Try to re-open the connection again.
-      //
-      primus.emit('reconnect', backoff);
-      primus.emit('outgoing::reconnect');
-    }, primus.backoff);
+    //
+    // The disconnect was unintentional, probably because the server shut down.
+    // So we should just start a reconnect procedure.
+    //
+    reconnect();
   });
 
   //
   // Setup the real-time client.
   //
-  this.client();
+  primus.client();
 
   //
   // Process the potential plugins.
   //
-  for (var plugin in this.ark) {
-    this.ark[plugin].call(this, this, options);
+  for (var plugin in primus.ark) {
+    primus.ark[plugin].call(primus, primus, options);
   }
 
-  return this;
+  return primus;
 };
 
 /**
- * Establish a connection with the server.
+ * Establish a connection with the server. When this function is called we
+ * assume that we don't have any open connections. If you do call it when you
+ * have a connection open, it could cause duplicate connections.
  *
- * @api private
+ * @api public
  */
 Primus.prototype.open = function open() {
   this.emit('outgoing::open');
@@ -400,7 +481,7 @@ Primus.prototype.end = function end(data) {
 };
 
 /**
- * Exponential backoff algorithm for retry operations. It uses an randomized
+ * Exponential back off algorithm for retry operations. It uses an randomized
  * retry so we don't DDOS our server when it goes down under pressure.
  *
  * @param {Function} callback Callback to be called after the timeout.
@@ -414,7 +495,7 @@ Primus.prototype.reconnect = function reconnect(callback, opts) {
   opts.minDelay = opts.minDelay || 500;       // Minimum delay.
   opts.retries = opts.retries || 10;          // Amount of allowed retries.
   opts.attempt = (+opts.attempt || 0) + 1;    // Current attempt.
-  opts.factor = opts.factor || 2;             // Backoff factor.
+  opts.factor = opts.factor || 2;             // Back off factor.
 
   // Bailout if we are about to make to much attempts. Please note that we use
   // `>` because we already incremented the value above.
@@ -422,19 +503,27 @@ Primus.prototype.reconnect = function reconnect(callback, opts) {
     return callback(new Error('Unable to retry'), opts);
   }
 
-  // Prevent duplicate backoff attempts.
+  // Prevent duplicate back off attempts.
   opts.backoff = true;
 
+  //
   // Calculate the timeout, but make it randomly so we don't retry connections
-  // at the same interval and defeat the purpose. This exponential backoff is
+  // at the same interval and defeat the purpose. This exponential back off is
   // based on the work of:
   //
   // http://dthain.blogspot.nl/2009/02/exponential-backoff-in-distributed.html
+  //
   opts.timeout = opts.attempt !== 1
     ? Math.min(Math.round(
         (Math.random() * 1) * opts.minDelay * Math.pow(opts.factor, opts.attempt)
       ), opts.maxDelay)
     : opts.minDelay;
+
+  //
+  // Emit a `reconnecting` event with current reconnect options. This allows
+  // them to update the UI and provide their users with feedback.
+  //
+  this.emit('reconnecting', opts);
 
   setTimeout(function delay() {
     opts.backoff = false;
@@ -445,27 +534,67 @@ Primus.prototype.reconnect = function reconnect(callback, opts) {
 };
 
 /**
+ * Create a shallow clone of a given object.
+ *
+ * @param {Object} obj The object that needs to be cloned.
+ * @returns {Object} Copy.
+ * @api private
+ */
+Primus.prototype.clone = function clone(obj) {
+  var copy = {}
+    , key;
+
+  for (key in obj) {
+    if (obj.hasOwnProperty(key)) copy[key] = obj[key];
+  }
+
+  return copy;
+};
+
+/**
  * Parse the connection string.
  *
- * @param {String} url Connection url.
+ * @param {String} url Connection URL.
  * @returns {Object} Parsed connection.
  * @api public
  */
 Primus.prototype.parse = parse;
 
 /**
- * Generates a connection uri.
+ * Parse a querystring.
  *
- * @param {String} protocol The protocol that should used to crate the uri.
- * @param {Boolean} querystring Do we need to include a querystring.
- * @returns {String} The url.
+ * @param {String} query The querystring that needs to be parsed.
+ * @returns {Object} Parsed query string.
+ * @api public
+ */
+Primus.prototype.querystring = function querystring(query) {
+  var parser = /([^=?&]+)=([^&]*)/g
+    , result = {}
+    , part;
+
+  //
+  // Little nifty parsing hack, leverage the fact that RegExp.exec increments
+  // the lastIndex property so we can continue executing this loop until we've
+  // parsed all results.
+  //
+  for (; part = parser.exec(query); result[part[1]] = part[2]);
+
+  return result;
+};
+
+/**
+ * Generates a connection URI.
+ *
+ * @param {String} protocol The protocol that should used to crate the URI.
+ * @param {Boolean} querystring Do we need to include a query string.
+ * @returns {String} The URL.
  * @api private
  */
 Primus.prototype.uri = function uri(protocol, querystring) {
   var server = [];
 
   server.push(this.url.protocol === 'https:' ? protocol +'s:' : protocol +':', '');
-  server.push(this.url.host, this.pathname.slice(1));
+  server.push(this.url.auth ? this.url.auth + '@' + this.url.host : this.url.host, this.pathname.slice(1));
 
   //
   // Optionally add a search query.
@@ -502,7 +631,7 @@ Primus.prototype.emits = function emits(event, parser) {
 
 /**
  * Register a new message transformer. This allows you to easily manipulate incoming
- * and outgoing data which is particulairy handy for plugins that want to send
+ * and outgoing data which is particularity handy for plugins that want to send
  * meta data together with the messages.
  *
  * @param {String} type Incoming or outgoing
@@ -519,7 +648,7 @@ Primus.prototype.transform = function transform(type, fn) {
 /**
  * Syntax sugar, adopt a Socket.IO like API.
  *
- * @param {String} url The url we want to connect to.
+ * @param {String} url The URL we want to connect to.
  * @param {Object} options Connection options.
  * @returns {Primus}
  * @api public
@@ -535,7 +664,7 @@ Primus.EventEmitter = EventEmitter;
 
 //
 // These libraries are automatically are automatically inserted at the
-// serverside using the Primus#library method.
+// server-side using the Primus#library method.
 //
 Primus.prototype.pathname = "/stream/";
 Primus.prototype.client = function client() {
@@ -543,11 +672,12 @@ Primus.prototype.client = function client() {
     , socket;
 
   //
-  // Selects an available Engine.io factory.
+  // Selects an available Engine.IO factory.
   //
   var factory = (function factory() {
     if ('undefined' !== typeof eio) return eio;
-    try { return require('engine.io-client'); }
+
+    try { return Primus.require('engine.io-client'); }
     catch (e) {}
 
     return undefined;
@@ -556,7 +686,7 @@ Primus.prototype.client = function client() {
   if (!factory) return this.emit('error', new Error('No Engine.IO client factory'));
 
   //
-  // Connect to the given url.
+  // Connect to the given URL.
   //
   primus.on('outgoing::open', function opening() {
     if (socket) socket.close();
@@ -587,7 +717,7 @@ Primus.prototype.client = function client() {
   });
 
   //
-  // Attempt to reconnect the socket. It asumes that the `close` event is
+  // Attempt to reconnect the socket. It assumes that the `close` event is
   // called if it failed to disconnect.
   //
   primus.on('outgoing::reconnect', function reconnect() {
@@ -615,14 +745,50 @@ Primus.prototype.decoder = function decoder(data, fn) {
   try { fn(undefined, JSON.parse(data)); }
   catch (e) { fn(e); }
 };
-Primus.prototype.version = "1.1.0";
+Primus.prototype.version = "1.2.0";
+
+//
+// Hack 1: \u2028 and \u2029 are allowed inside string in JSON. But JavaScript
+// defines them as newline separators. Because no literal newlines are allowed
+// in a string this causes a ParseError. We work around this issue by replacing
+// these characters with a properly escaped version for those chars. This can
+// cause errors with JSONP requests or if the string is just evaluated.
+//
+// This could have been solved by replacing the data during the "outgoing::data"
+// event. But as it affects the JSON encoding in general I've opted for a global
+// patch instead so all JSON.stringify operations are save.
+//
+if (
+    'object' === typeof JSON
+ && 'function' === typeof JSON.stringify
+ && JSON.stringify(['\u2028\u2029']) === '["\u2028\u2029"]'
+) {
+  JSON.stringify = function replace(stringify) {
+    var u2028 = /\u2028/g
+      , u2029 = /\u2029/g;
+
+    return function patched(value, replacer, spaces) {
+      var result = stringify.call(this, value, replacer, spaces);
+
+      //
+      // Replace the bad chars.
+      //
+      if (result) {
+        if (~result.indexOf('\u2028')) result = result.replace(u2028, '\\u2028');
+        if (~result.indexOf('\u2029')) result = result.replace(u2029, '\\u2029');
+      }
+
+      return result;
+    };
+  }(JSON.stringify);
+}
 
 if (
      'undefined' !== typeof document
   && 'undefined' !== typeof navigator
 ) {
   //
-  // Hack 1: If you press ESC in FireFox it will close all active connections.
+  // Hack 2: If you press ESC in FireFox it will close all active connections.
   // Normally this makes sense, when your page is still loading. But versions
   // before FireFox 22 will close all connections including WebSocket connections
   // after page load. One way to prevent this is to do a `preventDefault()` and
@@ -639,7 +805,7 @@ if (
   }
 
   //
-  // Hack 2: This is a Mac/Apple bug only, when you're behind a reverse proxy or
+  // Hack 3: This is a Mac/Apple bug only, when you're behind a reverse proxy or
   // have you network settings set to `automatic proxy discovery` the safari
   // browser will crash when the WebSocket constructor is initialised. There is
   // no way to detect the usage of these proxies available in JavaScript so we
