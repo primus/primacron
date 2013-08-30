@@ -1,27 +1,28 @@
-describe('scaler', function () {
+describe('Primacron', function () {
   'use strict';
 
   var transport = require('engine.io').transports.polling
+    , EventEmitter = require('events').EventEmitter
     , Socket = require('engine.io').Socket
     , eio = require('engine.io-client')
     , request = require('request')
+    , Primus = require('primus')
+    , Primacron = require('../')
     , redis = require('redis')
-    , Scaler = require('../')
     , chai = require('chai')
-    , WebSocket = require('ws')
+    , User = Primacron.User
     , expect = chai.expect
     , portnumbers = 1024
-    , User = Scaler.User
     , server
     , reds;
 
   //
-  // Include a stacktrace.
+  // Include a stack trace.
   //
   chai.Assertion.includeStack = true;
 
   beforeEach(function beforeEach(done) {
-    server = new Scaler();
+    server = new Primacron();
     server.listen(++portnumbers, done);
   });
 
@@ -31,28 +32,28 @@ describe('scaler', function () {
 
   it('requires and creates its own redis client if none is provided', function () {
     var reds = redis.createClient()
-      , scale = new Scaler(reds);
+      , prima = new Primacron(reds);
 
     // should set the same client
-    expect(scale.redis).to.equal(reds);
+    expect(prima.redis).to.equal(reds);
 
-    scale = new Scaler();
-    expect(scale.redis).to.not.equal(reds);
-    expect(scale.redis).to.be.instanceOf(redis.RedisClient);
+    prima = new Primacron();
+    expect(prima.redis).to.not.equal(reds);
+    expect(prima.redis).to.be.instanceOf(redis.RedisClient);
   });
 
   it('applies the configuration options', function () {
-    var scale = new Scaler(null, {
+    var prima = new Primacron(null, {
       broadcast: '/foo/broadcast',
       endpoint: '/foo/endpoint',
       redirect: 'http://google.com',
       namespace: 'cows'
     });
 
-    expect(scale.broadcast.toString()).to.equal('/foo/broadcast');
-    expect(scale.endpoint.toString()).to.equal('/foo/endpoint');
-    expect(scale.redirect).to.equal('http://google.com');
-    expect(scale.namespace).to.equal('cows');
+    expect(prima.broadcast.toString()).to.equal('/foo/broadcast');
+    expect(prima.endpoint.toString()).to.equal('/foo/endpoint');
+    expect(prima.redirect).to.equal('http://google.com');
+    expect(prima.namespace).to.equal('cows');
   });
 
   it('is an EventEmitter', function () {
@@ -74,7 +75,7 @@ describe('scaler', function () {
     }
 
     it('generates a session', function (done) {
-      var socket = new Socket('id', server.engine, transporter());
+      var socket = new Socket('id', server.primus.transformer.service, transporter());
 
       server.initialise(socket, function initialise(err, data) {
         if (err) return done(err);
@@ -89,7 +90,7 @@ describe('scaler', function () {
     });
 
     it('adds tailgators to the socket object', function (done) {
-      var socket = new Socket('id', server.engine, transporter())
+      var socket = new Socket('id', server.primus.transformer.service, transporter())
         , ns = server.namespace +'::foo::sessionid::pipe';
 
       server.uuid(function uuid(socket, fn) {
@@ -116,14 +117,6 @@ describe('scaler', function () {
   });
 
   describe('#intercept', function () {
-    it('closes WebSockets on disallowed paths', function (done) {
-      var ws = new WebSocket(server.uri.replace('http', 'ws'));
-
-      ws.on('error', function afa() {
-        done();
-      });
-    });
-
     it('intercepts PUT requests', function (done) {
       request({
         uri: server.uri + server.broadcast,
@@ -136,7 +129,7 @@ describe('scaler', function () {
         if (err) return done(err);
 
         expect(res.headers).to.have.property('x-powered-by');
-        expect(res.headers['x-powered-by']).to.equal('Scaler/v'+ server.version);
+        expect(res.headers['x-powered-by']).to.equal('Primacron/v'+ server.version);
         done();
       });
     });
@@ -158,11 +151,11 @@ describe('scaler', function () {
     });
 
     it('redirects to the given redirect', function (done) {
-      var scaler = new Scaler(null, { redirect: 'http://google.com' });
+      var prima = new Primacron(null, { redirect: 'http://google.com' });
 
-      scaler.listen(++portnumbers, function () {
+      prima.listen(++portnumbers, function () {
         request({
-          uri: scaler.uri +'/cows',
+          uri: prima.uri +'/cows',
           json: {
             id: 'foo',
             message: 'madfaf'
@@ -175,7 +168,7 @@ describe('scaler', function () {
           expect(res.statusCode).to.equal(301);
           expect(res.headers.location).to.equal('http://google.com');
 
-          scaler.destroy(done);
+          prima.destroy(done);
         });
       });
     });
@@ -200,50 +193,50 @@ describe('scaler', function () {
 
   describe('#network', function () {
     it('sets the address', function () {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      expect(scale.networkaddress).to.equal('localhost');
-      expect(scale.port).to.equal(null);
+      expect(prima.networkaddress).to.equal('localhost');
+      expect(prima.port).to.equal(null);
 
-      scale.network('127.0.0.1');
+      prima.network('127.0.0.1');
 
-      expect(scale.networkaddress).to.equal('127.0.0.1');
-      expect(scale.port).to.equal(null);
+      expect(prima.networkaddress).to.equal('127.0.0.1');
+      expect(prima.port).to.equal(null);
     });
 
     it('sets the port', function () {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      expect(scale.networkaddress).to.equal('localhost');
-      expect(scale.port).to.equal(null);
+      expect(prima.networkaddress).to.equal('localhost');
+      expect(prima.port).to.equal(null);
 
-      scale.network('127.0.0.1', 2456);
+      prima.network('127.0.0.1', 2456);
 
-      expect(scale.networkaddress).to.equal('127.0.0.1');
-      expect(scale.port).to.equal(2456);
+      expect(prima.networkaddress).to.equal('127.0.0.1');
+      expect(prima.port).to.equal(2456);
     });
 
     it('updates the values for the uri property', function () {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      expect(scale.uri).to.equal('http://localhost');
+      expect(prima.uri).to.equal('http://localhost');
 
-      scale.network('127.0.0.1');
-      expect(scale.uri).to.equal('http://127.0.0.1');
+      prima.network('127.0.0.1');
+      expect(prima.uri).to.equal('http://127.0.0.1');
 
-      scale.network('internal.dns', 1337);
-      expect(scale.uri).to.equal('http://internal.dns:1337');
+      prima.network('internal.dns', 1337);
+      expect(prima.uri).to.equal('http://internal.dns:1337');
     });
   });
 
   describe('#connect', function () {
     it('adds a new connection under the namespace', function (done) {
-      var scale = new Scaler(null, { namespace: 'ns' });
+      var prima = new Primacron(null, { namespace: 'ns' });
 
-      scale.connect('foo', 'bar', 'baz', function (err) {
+      prima.connect('foo', 'bar', 'baz', function (err) {
         if (err) return done(err);
 
-        scale.redis.get('ns::foo::bar', function (err, value) {
+        prima.redis.get('ns::foo::bar', function (err, value) {
           if (err) return done(err);
 
           expect(value).to.equal('http://localhost@baz');
@@ -253,18 +246,18 @@ describe('scaler', function () {
     });
 
     it('sets a expiree on the connection', function (done) {
-      var scale = new Scaler(null, { namespace: 'ns2', timeout: 1 });
+      var prima = new Primacron(null, { namespace: 'ns2', timeout: 1 });
 
-      scale.connect('foo', 'bar', 'baz', function (err) {
+      prima.connect('foo', 'bar', 'baz', function (err) {
         if (err) return done(err);
 
-        scale.redis.get('ns2::foo::bar', function (err, value) {
+        prima.redis.get('ns2::foo::bar', function (err, value) {
           if (err) return done(err);
 
           expect(value).to.equal('http://localhost@baz');
 
           setTimeout(function timeout() {
-            scale.redis.get('ns2::foo::bar', function (err, value) {
+            prima.redis.get('ns2::foo::bar', function (err, value) {
               if (err) return done(err);
 
               expect(!value).to.equal(true);
@@ -276,13 +269,13 @@ describe('scaler', function () {
     });
 
     it('emits error::connect on failures', function (done) {
-      var scale = new Scaler(null , { namespace: 'ff', timeout: 'this should fail' });
+      var prima = new Primacron(null , { namespace: 'ff', timeout: 'this should fail' });
 
       this.timeout(10000);
 
-      scale.connect('foo', 'bar', 'banana');
+      prima.connect('foo', 'bar', 'banana');
 
-      scale.on('error::connect', function error(err, context) {
+      prima.on('error::connect', function error(err, context) {
         expect(err).to.be.instanceOf(Error);
         expect(err.message).to.contain('integer');
         expect(context.key).to.equal('ff::foo::bar');
@@ -293,16 +286,16 @@ describe('scaler', function () {
     });
 
     it('retrieve the "tailgators" when joining', function (done) {
-      var scale = new Scaler(null, { namespace: 'ye' });
+      var prima = new Primacron(null, { namespace: 'ye' });
 
-      scale.redis.sadd('ye::foo::bar::pipe', scale.uri +'@momoa', function (err) {
+      prima.redis.sadd('ye::foo::bar::pipe', prima.uri +'@momoa', function (err) {
         if (err) return done(err);
 
-        scale.connect('foo', 'bar', 'banana', function (err, tailgators) {
+        prima.connect('foo', 'bar', 'banana', function (err, tailgators) {
           if (err) return done(err);
 
           expect(tailgators).to.be.a('array');
-          expect(tailgators[0]).to.equal(scale.uri +'@momoa');
+          expect(tailgators[0]).to.equal(prima.uri +'@momoa');
           done();
         });
       });
@@ -311,15 +304,15 @@ describe('scaler', function () {
 
   describe('#disconnect', function () {
     it('removes the connection from redis', function (done) {
-      var scale = new Scaler(null, { namespace: 'bar' });
+      var prima = new Primacron(null, { namespace: 'bar' });
 
-      scale.connect('meh', 'bleh', 'spam', function (err) {
+      prima.connect('meh', 'bleh', 'spam', function (err) {
         if (err) return done(err);
 
-        scale.disconnect('meh', 'bleh', 'spam', function (err) {
+        prima.disconnect('meh', 'bleh', 'spam', function (err) {
           if (err) return done(err);
 
-          scale.redis.get('bar::meh::bleh', function (err, data) {
+          prima.redis.get('bar::meh::bleh', function (err, data) {
             if (err) return done(err);
 
             expect(!data).to.equal(true);
@@ -334,10 +327,10 @@ describe('scaler', function () {
 
   describe('#find', function () {
     it('finds receives the server and socket id', function (done) {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      scale.connect('foo', 'bar', 'banana', function () {
-        scale.find('foo', 'bar', function (err, server, socket) {
+      prima.connect('foo', 'bar', 'banana', function () {
+        prima.find('foo', 'bar', function (err, server, socket) {
           if (err) return done(err);
 
           expect(server).to.equal('http://localhost');
@@ -348,9 +341,9 @@ describe('scaler', function () {
     });
 
     it('doesnt find anything', function (done) {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      scale.find('yo', 'momma', function (err, server, socket) {
+      prima.find('yo', 'momma', function (err, server, socket) {
         if (err) return done(err);
 
         expect(!server).to.equal(true);
@@ -379,7 +372,9 @@ describe('scaler', function () {
     }
 
     it('doesnt pipe to other accounts', function (done) {
-      var socket = new Socket('id', server.engine, transporter());
+      var socket = new Primus.Spark(new EventEmitter, {}, {}, {
+        query: { account: 'foo' }
+      }, 'id');
 
       server.pipe(socket, 'bar', 'baz', function (err) {
         expect(err).to.be.instanceOf(Error);
@@ -512,9 +507,9 @@ describe('scaler', function () {
 
   describe('#validate', function () {
     it('calls the provided validated function on the validate:: namespace', function (done) {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      scale.validate('foo', function validate(data, cb) {
+      prima.validate('foo', function validate(data, cb) {
         expect(data).to.equal('meh');
         expect(cb).to.be.a('function');
 
@@ -523,13 +518,13 @@ describe('scaler', function () {
         throw new Error('Broken');
       });
 
-      scale.emit('validate::foo', 'meh', new User(), '"meh"');
+      prima.emit('validate::foo', 'meh', new User(), '"meh"');
     });
 
     it('automatically detects the callback location with missing args', function (done) {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      scale.validate('foo', function(arg, brg, crg, drg, cb) {
+      prima.validate('foo', function(arg, brg, crg, drg, cb) {
         expect(arg).to.equal('foo');
         expect(!brg).to.equal(true);
         expect(!crg).to.equal(true);
@@ -546,13 +541,13 @@ describe('scaler', function () {
         done();
       });
 
-      scale.emit('validate::foo', 'foo', new User(), '"foo"');
+      prima.emit('validate::foo', 'foo', new User(), '"foo"');
     });
 
     it('automatically detects the callback location with tomuch args', function (done) {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      scale.validate('foo', function(arg, cb) {
+      prima.validate('foo', function(arg, cb) {
         expect(arg).to.equal('foo');
         expect(cb).to.be.a('function');
 
@@ -564,20 +559,20 @@ describe('scaler', function () {
         done();
       });
 
-      scale.emit('validate::foo', 'foo', 'bar', 'baz', 'moo', '["foo", "bar", "baz", "moo"]');
+      prima.emit('validate::foo', 'foo', 'bar', 'baz', 'moo', '["foo", "bar", "baz", "moo"]');
     });
 
     it('emits error::validation when an error occures', function (done) {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      scale.validate('foo', function validate(data, cb) {
+      prima.validate('foo', function validate(data, cb) {
         expect(data).to.equal('meh');
         expect(cb).to.be.a('function');
 
         cb(undefined, false);
       });
 
-      scale.once('error::validation', function validate(err, context) {
+      prima.once('error::validation', function validate(err, context) {
         expect(context.event).to.equal('foo');
         expect(context.user).to.be.instanceOf(User);
 
@@ -589,20 +584,20 @@ describe('scaler', function () {
         throw new Error('Broken');
       });
 
-      scale.emit('validate::foo', 'meh', new User(),'"meh"');
+      prima.emit('validate::foo', 'meh', new User(),'"meh"');
     });
 
     it('emits error::validation when the validation fails', function (done) {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      scale.validate('foo', function validate(data, cb) {
+      prima.validate('foo', function validate(data, cb) {
         expect(data).to.equal('meh');
         expect(cb).to.be.a('function');
 
         cb(new Error('Failed to validate'));
       });
 
-      scale.once('error::validation', function validate(err, context) {
+      prima.once('error::validation', function validate(err, context) {
         expect(context.event).to.equal('foo');
         expect(context.user).to.be.instanceOf(User);
 
@@ -614,13 +609,13 @@ describe('scaler', function () {
         throw new Error('Broken');
       });
 
-      scale.emit('validate::foo', 'meh', new User(), '"meh"');
+      prima.emit('validate::foo', 'meh', new User(), '"meh"');
     });
 
     it('calls stream:: event once the event was validated successfully', function (done) {
-      var scale = new Scaler();
+      var prima = new Primacron();
 
-      scale.validate('foo', function validate(data, cb) {
+      prima.validate('foo', function validate(data, cb) {
         expect(data).to.equal('meh');
         expect(cb).to.be.a('function');
 
@@ -634,7 +629,7 @@ describe('scaler', function () {
         done();
       });
 
-      scale.emit('validate::foo', 'meh', new User(), '"meh"');
+      prima.emit('validate::foo', 'meh', new User(), '"meh"');
     });
   });
 

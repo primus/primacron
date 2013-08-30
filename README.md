@@ -1,16 +1,15 @@
-# Scaler
+# Primacron
 
-Scaler is a small API wrapper for Engine.IO that takes care of our "scaling" and
+Primacron is a small API wrapper for Engine.IO that takes care of our "scaling" and
 multi server logic. This keeps our services as light as possible so we can focus
 on our business logic instead of other issues.
 
 ## Installation
 
-Installation in done through git, as this module isn't released a public module
-in the NPM registery.
+The module can be installed through npm:
 
 ```
-npm install git+ssh://git@github.com:observing/scaler.git#master
+npm install --save primacron
 ```
 
 ## Creating your first server
@@ -19,28 +18,28 @@ The module exposes it's constructor as primary interface. This makes it easy to
 extend and to initialise:
 
 ```js
-var Scaler = require('scaler')
+var Primacron = require('primacron')
   , redis = require('redis');
 
-var server = new Scaler(redis.createClient(), { options })
+var server = new Primacron(redis.createClient(), { options })
 ```
 
 Or if want some alternate syntax you could use:
 
 ```js
-var scaler = require('scaler')
+var primacron = require('primacron')
   , redis = require('redis');
 
-var server = scaler.createServer(redis, { options });
+var server = primacron.createServer(redis, { options });
 ```
 
 And even:
 
 ```
-var scaler = require('scaler')
+var primacron = require('primacron')
   , redis = require('redis');
 
-var server = scaler(redis.createClient(), { options })
+var server = primacron(redis.createClient(), { options })
 ```
 
 Once you've created your server instance, it needs to listen to port number.
