@@ -1,7 +1,7 @@
 {
-  "name": "scaler",
+  "name": "primacron",
   "version": "0.0.0",
-  "description": "Scalable API wrapper for Engine.IO",
+  "description": "Primacron is a high level abstraction build on top of Primus",
   "main": "index.js",
   "scripts": {
     "test": "NODE_ENV=testing ./node_modules/.bin/mocha $(find test -name '*.test.js')"
@@ -11,24 +11,23 @@
     "url": "git://github.com/observing/scaler.git"
   },
   "keywords": [
-    "Engine.IO",
+    "Primacron",
     "Real-time",
-    "scaling"
+    "Primus",
+    "Scaling"
   ],
   "author": "Arnout Kazemier <arnout@observe.it>",
-  "license": "Closed Source",
-  "private": true,
+  "license": "MIT",
   "dependencies": {
     "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
     "request": "2.21.x",
-    "async": "~0.2.9"
+    "async": "0.2.x",
+    "primus": "1.1.x"
   },
   "devDependencies": {
     "mocha": "1.10.x",
     "chai": "1.6.x",
-    "pre-commit": "0.0.3",
-    "redis": "0.8.3",
-    "engine.io-client": "git://github.com/LearnBoost/engine.io-client.git",
-    "ws": "~0.4.25"
+    "pre-commit": "0.0.x",
+    "redis": "0.8.x"
   }
 }
