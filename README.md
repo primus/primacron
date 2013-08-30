@@ -7,6 +7,9 @@ insight on how you could do scaling with Primus and build a module on top of it.
 
 # Primacron
 
+[![Build Status](https://travis-ci.org/observing/primacron.png)](https://travis-ci.org/observing/primacron)
+[![NPM version](https://badge.fury.io/js/primacron.png)](http://badge.fury.io/js/primacron)
+
 Primacron is a small API wrapper for Engine.IO that takes care of our "scaling" and
 multi server logic. This keeps our services as light as possible so we can focus
 on our business logic instead of other issues.
