@@ -1,3 +1,10 @@
+```
+WORD OF CAUTION:
+
+This module is still under developmented, it was Open Sourced to give people some
+insight on how you could do scaling with Primus and build a module on top of it.
+```
+
 # Primacron
 
 Primacron is a small API wrapper for Engine.IO that takes care of our "scaling" and
