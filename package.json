@@ -22,7 +22,7 @@
     "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
     "request": "2.21.x",
     "async": "0.2.x",
-    "primus": "1.1.x"
+    "primus": "1.4.x"
   },
   "devDependencies": {
     "mocha": "1.10.x",
