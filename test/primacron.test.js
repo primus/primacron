@@ -497,7 +497,7 @@ describe('Primacron', function () {
         });
       });
 
-      io.on('message', function onmessage(data) {
+      io.once('message', function onmessage(data) {
         expect(data).to.equal('foobar');
         io.close();
         done();
