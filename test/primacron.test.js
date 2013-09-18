@@ -476,7 +476,7 @@ describe('Primacron', function () {
         expect(res.statusCode).to.equal(404);
         expect(body).to.be.a('object');
         expect(body.status).to.equal(res.statusCode);
-        expect(body.description).to.include('socket was not found');
+        expect(body.description).to.include('spark was not found');
 
         done();
       });
@@ -498,9 +498,13 @@ describe('Primacron', function () {
       });
 
       io.once('message', function onmessage(data) {
-        expect(data).to.equal('foobar');
-        io.close();
-        done();
+        server.primus.encoder('foobar', function (err, encoded) {
+          if (err) return done(err);
+
+          expect(data).to.equal(encoded);
+          io.close();
+          done();
+        });
       });
     });
   });

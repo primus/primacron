@@ -1,13 +1,4 @@
-(function (name, context, definition) {
-  if (typeof module !== "undefined" && module.exports) {
-    module.exports = definition();
-  } else if (typeof define == "function" && define.amd) {
-    define(definition);
-  } else {
-    context[name] = definition();
-  }
-})("Primus", this, function PRIMUS() {
-/*globals require, define */
+(function (name, context, definition) {  if (typeof module !== "undefined" && module.exports) {    module.exports = definition();  } else if (typeof define == "function" && define.amd) {    define(definition);  } else {    context[name] = definition();  }})("Primus", this, function PRIMUS() {/*globals require, define */
 'use strict';
 
 /**
@@ -315,9 +306,14 @@ Primus.prototype.AVOID_WEBSOCKETS = false;
  * @api private
  */
 Primus.prototype.NETWORK_EVENTS = false;
+Primus.prototype.online = true;
 
 try {
-  Primus.prototype.NETWORK_EVENTS =  'onLine' in navigator && window.addEventListener;
+  if (Primus.prototype.NETWORK_EVENTS = 'onLine' in navigator && window.addEventListener) {
+    if (!navigator.onLine) {
+      Primus.prototype.online = false;
+    }
+  }
 } catch (e) { }
 
 /**
@@ -378,6 +374,7 @@ Primus.prototype.initialise = function initalise(options) {
   });
 
   primus.on('incoming::pong', function pong(time) {
+    primus.online = true;
     primus.clearTimeout('pong').heartbeat();
   });
 
@@ -502,11 +499,13 @@ Primus.prototype.initialise = function initalise(options) {
   if (!primus.NETWORK_EVENTS) return primus;
 
   window.addEventListener('offline', function offline() {
+    primus.online = false;
     primus.emit('offline');
     primus.end();
   }, false);
 
   window.addEventListener('online', function online() {
+    primus.online = true;
     primus.emit('online');
 
     if (~primus.options.strategy.indexOf('online')) primus.reconnect();
@@ -596,6 +595,13 @@ Primus.prototype.heartbeat = function heartbeat() {
    */
   function pong() {
     primus.clearTimeout('pong');
+
+    //
+    // The network events already captured the offline event.
+    //
+    if (primus.online) return;
+
+    primus.online = false;
     primus.emit('offline');
     primus.emit('incoming::end');
   }
@@ -682,6 +688,13 @@ Primus.prototype.backoff = function backoff(callback, opts) {
 
   var primus = this;
 
+  //
+  // Bailout when we already have a backoff process running. We shouldn't call
+  // the callback then as it might cause an unexpected `end` event as another
+  // reconnect process is already running.
+  //
+  if (opts.backoff) return primus;
+
   opts.maxDelay = opts.maxDelay || Infinity;  // Maximum delay.
   opts.minDelay = opts.minDelay || 500;       // Minimum delay.
   opts.retries = opts.retries || 10;          // Amount of allowed retries.
@@ -689,18 +702,12 @@ Primus.prototype.backoff = function backoff(callback, opts) {
   opts.factor = opts.factor || 2;             // Back off factor.
 
   //
-  // Bailout when we already have a backoff process running. We shouldn't call
-  // the callback then as it might cause an unexpected `end` event as another
-  // reconnect process is already running.
-  //
-  if (opts.backoff) return;
-
-  //
   // Bailout if we are about to make to much attempts. Please note that we use
   // `>` because we already incremented the value above.
   //
   if (opts.attempt > opts.retries) {
-    return callback(new Error('Unable to retry'), opts);
+    callback(new Error('Unable to retry'), opts);
+    return primus;
   }
 
   //
@@ -751,9 +758,6 @@ Primus.prototype.reconnect = function reconnect() {
   primus.attempt = primus.attempt || primus.clone(primus.options.reconnect);
 
   primus.backoff(function attempt(fail, backoff) {
-    // Save the opts again of this back off, so they re-used.
-    primus.attempt = backoff;
-
     if (fail) {
       primus.attempt = null;
       return primus.emit('end');
@@ -800,14 +804,28 @@ Primus.prototype.end = function end(data) {
  * @api private
  */
 Primus.prototype.clone = function clone(obj) {
-  var copy = {}
-    , key;
+  return this.merge({}, obj);
+};
 
-  for (key in obj) {
-    if (obj.hasOwnProperty(key)) copy[key] = obj[key];
+/**
+ * Merge different objects in to one target object.
+ *
+ * @param {Object} target The object where everything should be merged in.
+ * @returns {Object} target
+ * @api private
+ */
+Primus.prototype.merge = function merge(target) {
+  var args = Array.prototype.slice.call(arguments, 1);
+
+  for (var i = 0, l = args.length, key, obj; i < l; i++) {
+    obj = args[i];
+
+    for (key in obj) {
+      if (obj.hasOwnProperty(key)) target[key] = obj[key];
+    }
   }
 
-  return copy;
+  return target;
 };
 
 /**
@@ -846,19 +864,53 @@ Primus.prototype.querystring = function querystring(query) {
  *
  * @param {String} protocol The protocol that should used to crate the URI.
  * @param {Boolean} querystring Do we need to include a query string.
- * @returns {String} The URL.
+ * @returns {String|options} The URL.
  * @api private
  */
-Primus.prototype.uri = function uri(protocol, querystring) {
-  var server = [];
-
-  server.push(this.url.protocol === 'https:' ? protocol +'s:' : protocol +':', '');
-  server.push(this.url.auth ? this.url.auth + '@' + this.url.host : this.url.host, this.pathname.slice(1));
+Primus.prototype.uri = function uri(options, querystring) {
+  var url = this.url
+    , server = [];
 
   //
-  // Optionally add a search query.
+  // Backwards compatible with Primus 1.4.0
+  // @TODO Remove me for Primus 2.0
   //
-  if (this.url.search && querystring) server.push(this.url.search);
+  if ('string' === typeof options) {
+    options = { protocol: options };
+    if (querystring) options.query = querystring;
+  }
+
+  options = options || {};
+  options.protocol = 'protocol' in options ? options.protocol : 'http';
+  options.query = url.search && 'query' in options ? (url.search.charAt(0) === '?' ? url.search.slice(1) : url.search) : false;
+  options.secure = 'secure' in options ? options.secure : url.protocol === 'https:';
+  options.auth = 'auth' in options ? options.auth : url.auth;
+  options.pathname = 'pathname' in options ? options.pathname : this.pathname.slice(1);
+  options.port = 'port' in options ? options.port : url.port || (options.secure ? 443 : 80);
+  options.host = 'host' in options ? options.host : url.hostname || url.host.replace(':'+ url.port, '');
+
+  //
+  // Automatically suffix the protocol so we can supply `ws` and `http` and it gets
+  // transformed correctly.
+  //
+  server.push(options.secure ? options.protocol +'s:' : options.protocol +':', '');
+
+  if (options.auth) server.push(options.auth +'@'+ url.host);
+  else server.push(url.host);
+
+  //
+  // Pathnames are optional as some Transformers would just use the pathname
+  // directly.
+  //
+  if (options.pathname) server.push(options.pathname);
+
+  //
+  // Optionally add a search query, again, not supported by all Transformers.
+  // SockJS is known to throw errors when a query string is included.
+  //
+  if (options.query) server.push('?'+ options.query);
+
+  if (options.object) return options;
   return server.join('/');
 };
 
@@ -905,6 +957,19 @@ Primus.prototype.transform = function transform(type, fn) {
 };
 
 /**
+ * A critical error has occured, if we have an `error` listener, emit it there.
+ * If not, throw it, so we get a stacktrace + proper error message.
+ *
+ * @param {Error} err The critical error.
+ * @api private
+ */
+Primus.prototype.critical = function critical(err) {
+  if (this.listeners('error').length) return this.emit('error', err);
+
+  throw err;
+};
+
+/**
  * Syntax sugar, adopt a Socket.IO like API.
  *
  * @param {String} url The URL we want to connect to.
@@ -925,8 +990,6 @@ Primus.EventEmitter = EventEmitter;
 // These libraries are automatically are automatically inserted at the
 // server-side using the Primus#library method.
 //
-Primus.prototype.authorization = false;
-Primus.prototype.pathname = "/stream/";
 Primus.prototype.client = function client() {
   var primus = this
     , socket;
@@ -943,7 +1006,7 @@ Primus.prototype.client = function client() {
     return undefined;
   })();
 
-  if (!factory) return this.emit('error', new Error('No Engine.IO client factory'));
+  if (!factory) return primus.critical(new Error('Missing required `engine.io-client` module. Please run `npm install --save engine.io-client`'));
 
   //
   // Connect to the given URL.
@@ -951,7 +1014,7 @@ Primus.prototype.client = function client() {
   primus.on('outgoing::open', function opening() {
     if (socket) socket.close();
 
-    primus.socket = socket = factory(primus.uri('ws', true), {
+    primus.socket = socket = factory(primus.uri({ protocol: 'ws', query: true }), {
       path: this.pathname,
       transports: !primus.AVOID_WEBSOCKETS
         ? ['polling', 'websocket']
@@ -997,6 +1060,8 @@ Primus.prototype.client = function client() {
     }
   });
 };
+Primus.prototype.authorization = false;
+Primus.prototype.pathname = "/stream/";
 Primus.prototype.encoder = function encoder(data, fn) {
   var err;
 
@@ -1013,7 +1078,7 @@ Primus.prototype.decoder = function decoder(data, fn) {
 
   fn(err, data);
 };
-Primus.prototype.version = "1.4.0";
+Primus.prototype.version = "1.4.1";
 
 //
 // Hack 1: \u2028 and \u2029 are allowed inside string in JSON. But JavaScript

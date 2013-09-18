@@ -429,7 +429,8 @@ Primacron.prototype.pipe = function pipe(socket, account, session, fn) {
  * @api private
  */
 Primacron.prototype.incoming = function incoming(req, res) {
-  var primacron = this
+  var primus = this.primus
+    , primacron = this
     , buff = '';
 
   //
@@ -439,58 +440,57 @@ Primacron.prototype.incoming = function incoming(req, res) {
   req.setEncoding('utf8');
   req.on('data', function data(chunk) { buff += chunk; });
   req.once('end', function end() {
-    var data;
+    primus.decoder(buff, function (err, data) {
+      if (err) {
+        primacron.end('broken', res);
+        return primacron.emit('error::invalid', err, {
+          raw: buff,
+          request: req
+        });
+      }
 
-    try { data = primacron.decode(buff); }
-    catch (e) {
-      primacron.end('broken', res);
-      return primacron.emit('error::invalid', e, {
-        raw: buff,
-        request: req
-      });
-    }
+      if (
+          typeof data !== 'object'                // Message should be an object.
+        || Array.isArray(data)                    // Not an array..
+        || !('message' in data && 'id' in data)   // And have the required fields.
+      ) {
+        primacron.end('invalid', res);
+        return primacron.emit('error::invalid', new Error('Invalid packet received'), {
+          raw: buff,
+          request: req
+        });
+      }
 
-    if (
-        typeof data !== 'object'                // Message should be an object.
-      || Array.isArray(data)                    // Not an array..
-      || !('message' in data && 'id' in data)   // And have the required fields.
-    ) {
-      primacron.end('invalid', res);
-      return primacron.emit('error::invalid', new Error('Invalid packet received'), {
-        raw: buff,
-        request: req
-      });
-    }
+      //
+      // Try to find the connected socket on our server.
+      //
+      if (!(data.id in primacron.primus.connections)) {
+        return primacron.end('unknown socket', res);
+      }
 
-    //
-    // Try to find the connected socket on our server.
-    //
-    if (!(data.id in primacron.primus.connections)) {
-      return primacron.end('unknown socket', res);
-    }
+      //
+      // Write the message to the client.
+      //
+      var socket = primacron.primus.connections[data.id];
 
-    //
-    // Write the message to the client.
-    //
-    var socket = primacron.primus.connections[data.id];
+      //
+      // Determine how we should handle this message.
+      //
+      switch (toString.call(data.message).slice(8, -1)) {
+        case 'String':
+          socket.emit('primacron::pipe', data.message);
+        break;
 
-    //
-    // Determine how we should handle this message.
-    //
-    switch (toString.call(data.message).slice(8, -1)) {
-      case 'String':
-        socket.emit('primacron::pipe', data.message);
-      break;
+        case 'Array':
+          socket.emit('primacron::tail', data.message);
+        break;
 
-      case 'Array':
-        socket.emit('primacron::tail', data.message);
-      break;
+        default:
+          socket.emit('primacron', data.message);
+      }
 
-      default:
-        socket.emit('primacron', data.message);
-    }
-
-    primacron.end('sending', res);
+      primacron.end('sending', res);
+    });
   });
 
   return this;
@@ -631,8 +631,6 @@ Primacron.prototype.connection = function connection(spark) {
   // Listen for external requests.
   //
   spark.on('primacron::pipe', function pipe(data) {
-    if ('string' !== typeof data) data = primacron.encode(data);
-
     spark.write(data);
   });
 
