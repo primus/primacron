@@ -79,6 +79,7 @@ var Primacron = module.exports = function Primacron(redis, options) {
   // These properties will be set once we're initialized.
   //
   this.primus = null;         // Primus server instance.
+  this.primusQueue = [];      // Primus command proxy queue.
   this.server = null;         // HTTP server instance.
 
   //
@@ -776,10 +777,24 @@ Primacron.prototype.listen = function listen() {
     parser: this.parser
   });
 
+  //
+  // This is an engine.io specific hack that is made in a custom fork that we're
+  // using of engine.io. This fork allows us to send data to the user during the
+  // handshake.
+  //
   this.primus.transformer.service.onOpen = this.initialise.bind(this);
   this.primus.use('events', require('./plugins/events'));
   this.primus.on('connection', this.connection.bind(this));
   this.primus.save(__dirname +'/dist/primacon.js');
+
+  //
+  // Process queued commands for primus.
+  //
+  if (this.primusQueue.length) this.primusQueue.forEach(function (queued) {
+    this.primus[queued.method].apply(this.primus, queued.args);
+  }, this);
+
+  this.primusQueue.length = 0;
 
   //
   // Proxy all arguments to the server.
@@ -805,6 +820,15 @@ Primacron.prototype.listen = function listen() {
 //
 ['use', 'library', 'save', 'transform'].forEach(function missing(method) {
   Primacron.prototype[method] = function proxy() {
+    //
+    // Primus is only availble after we've listened to the server, so we just
+    // want to queue up all these arguments untill we've actually listend.
+    //
+    if (!this.primus) {
+      this.primusQueue.push({ method: method, args: arguments });
+      return this;
+    }
+
     this.primus[method].apply(this.primus, arguments);
     return this;
   };
