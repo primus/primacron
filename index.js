@@ -821,6 +821,13 @@ Primacron.createServer = function createServer(redis, options) {
   return new Primacron(redis, options);
 };
 
+/**
+ * Make the module extendable.
+ *
+ * @type {Function}
+ */
+Primacron.extend = require('extendable');
+
 //
 // Expose the User object.
 //
