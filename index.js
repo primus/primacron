@@ -3,7 +3,8 @@
 var parser = require('url').parse
   , request = require('request')
   , Primus = require('primus')
-  , async = require('async');
+  , async = require('async')
+  , User = require('./user');
 
 //
 // Cached prototypes to speed up lookups.
@@ -16,21 +17,6 @@ var toString = Object.prototype.toString
 // Noop function.
 //
 function noop() {}
-
-/**
- * Simple user interface which will optimize our memory usage.
- *
- * @constructor
- * @param {String} account The account id.
- * @param {String} session the session id.
- * @param {String} id The Engine.IO socket id
- * @api private
- */
-function User(account, session, id) {
-  this.account = account;
-  this.session = session;
-  this.id = this;
-}
 
 /**
  * Create a new Primacron instance.
@@ -92,10 +78,12 @@ var Primacron = module.exports = function Primacron(redis, options) {
 // The Primacron inherits from the EventEmitter so we can safely emit events
 // without creating tail recursion.
 //
-Primacron.prototype.__proto__ = require('events').EventEmitter.prototype;
+Primacron.prototype.__proto__ = require('eventemitter3').prototype;
 
 //
-// Because we are to lazy to combine address + port every single time.
+// Because we are to lazy to combine address + port every single time, we've
+// introduced a small shorthand for creating the network based URL for other
+// Primus servers.
 //
 Object.defineProperty(Primacron.prototype, 'uri', {
   get: function get() {
@@ -116,6 +104,7 @@ Primacron.prototype.version = require('./package.json').version;
  */
 Primacron.prototype.uuid = function uuid(generator) {
   this.generator = generator;
+
   return this;
 };
 
@@ -786,9 +775,9 @@ Primacron.prototype.listen = function listen() {
   this.primus.save(__dirname +'/dist/primacon.js');
 
   //
-  // Process queued commands for primus.
+  // Process queued commands for Primus.
   //
-  if (this.primusQueue.length) this.primusQueue.forEach(function (queued) {
+  if (this.primusQueue.length) this.primusQueue.forEach(function queuing(queued) {
     this.primus[queued.method].apply(this.primus, queued.args);
   }, this);
 
@@ -819,8 +808,8 @@ Primacron.prototype.listen = function listen() {
 ['use', 'library', 'save', 'transform'].forEach(function missing(method) {
   Primacron.prototype[method] = function proxy() {
     //
-    // Primus is only availble after we've listened to the server, so we just
-    // want to queue up all these arguments untill we've actually listend.
+    // Primus is only available after we've listened to the server, so we just
+    // want to queue up all these arguments until we've actually listened.
     //
     if (!this.primus) {
       this.primusQueue.push({ method: method, args: arguments });
