@@ -56,8 +56,8 @@ describe('Primacron', function () {
     expect(prima.namespace).to.equal('cows');
   });
 
-  it('is an EventEmitter', function () {
-    expect(server).to.be.instanceOf(require('events').EventEmitter);
+  it('is an EventEmitter3', function () {
+    expect(server).to.be.instanceOf(require('eventemitter3'));
   });
 
   it('exposes the version number', function () {

@@ -1,6 +1,7 @@
 'use strict';
 
-var parser = require('url').parse
+var EventEmitter = require('eventemitter3')
+  , parser = require('url').parse
   , request = require('request')
   , Primus = require('primus')
   , async = require('async')
@@ -72,13 +73,15 @@ var Primacron = module.exports = function Primacron(redis, options) {
   // Stores `sockets` by created session ids.
   //
   this.sockets = Object.create(null);
+
+  EventEmitter.call(this);
 };
 
 //
 // The Primacron inherits from the EventEmitter so we can safely emit events
 // without creating tail recursion.
 //
-Primacron.prototype.__proto__ = require('eventemitter3').prototype;
+Primacron.prototype.__proto__ = EventEmitter.prototype;
 
 //
 // Because we are to lazy to combine address + port every single time, we've
