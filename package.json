@@ -21,7 +21,7 @@
   "dependencies": {
     "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
     "request": "2.34.x",
-    "async": "2.0.x",
+    "async": "0.2.x",
     "primus": "2.0.x",
     "engine.io-client": "0.7.x",
     "eventemitter3": "0.1.x",
