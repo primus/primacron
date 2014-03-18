@@ -4,6 +4,7 @@ var EventEmitter = require('eventemitter3')
   , parser = require('url').parse
   , request = require('request')
   , Primus = require('primus')
+  , fuse = require('fusing')
   , async = require('async')
   , User = require('./user');
 
@@ -81,7 +82,7 @@ var Primacron = module.exports = function Primacron(redis, options) {
 // The Primacron inherits from the EventEmitter so we can safely emit events
 // without creating tail recursion.
 //
-Primacron.prototype.__proto__ = EventEmitter.prototype;
+fuse(Primacron, EventEmitter);
 
 //
 // Because we are to lazy to combine address + port every single time, we've
@@ -94,10 +95,13 @@ Object.defineProperty(Primacron.prototype, 'uri', {
   }
 });
 
-//
-// Expose the version number.
-//
-Primacron.prototype.version = require('./package.json').version;
+/**
+ * Expose the current version of the Primacron server.
+ *
+ * @type {String}
+ * @public
+ */
+Primacron.readable('version', require('./package.json').version);
 
 /**
  * Add a new custom session id generator.
@@ -105,11 +109,11 @@ Primacron.prototype.version = require('./package.json').version;
  * @param {Function} generator A custom generator for unique ids.
  * @api public
  */
-Primacron.prototype.uuid = function uuid(generator) {
+Primacron.readable('uuid', function uuid(generator) {
   this.generator = generator;
 
   return this;
-};
+});
 
 /**
  * A simple persistent session generator.
@@ -118,11 +122,11 @@ Primacron.prototype.uuid = function uuid(generator) {
  * @param {Function} fn Callback.
  * @api private
  */
-Primacron.prototype.generator = function generator(spark, fn) {
+Primacron.writable('generator', function generator(spark, fn) {
   fn(undefined, [1, 1, 1, 1].map(function generator() {
     return Math.random().toString(36).substring(2).toUpperCase();
   }).join('-'));
-};
+});
 
 /**
  * Simple Engine.io onOpen method handler so we can add data to the handshake.
@@ -132,7 +136,7 @@ Primacron.prototype.generator = function generator(spark, fn) {
  * @param {Function} fn Callback.
  * @api private
  */
-Primacron.prototype.initialise = function initialise(socket, fn) {
+Primacron.readable('initialise', function initialise(socket, fn) {
   var primacron = this;
 
   //
@@ -173,7 +177,7 @@ Primacron.prototype.initialise = function initialise(socket, fn) {
       }
     ], fn);
   });
-};
+});
 
 /**
  * Intercept HTTP requests and handle them accordingly.
@@ -182,7 +186,7 @@ Primacron.prototype.initialise = function initialise(socket, fn) {
  * @param {Response} res HTTP response instance.
  * @api private
  */
-Primacron.prototype.intercept = function intercept(req, res) {
+Primacron.readable('intercept', function intercept(req, res) {
   if (
        'put' === (req.method || '').toLowerCase()
     && this.broadcast === req.uri.pathname
@@ -209,7 +213,7 @@ Primacron.prototype.intercept = function intercept(req, res) {
   // Well, fuck it, kill it, with fire!
   //
   this.end('bad request', res);
-};
+});
 
 /**
  * Set the network address where this server is accessible on.
@@ -218,12 +222,12 @@ Primacron.prototype.intercept = function intercept(req, res) {
  * @param {String} port The port number.
  * @api public
  */
-Primacron.prototype.network = function network(address, port) {
+Primacron.readable('network', function network(address, port) {
   if (address) this.networkaddress = address;
   if (port) this.port = port;
 
   return this;
-};
+});
 
 /**
  * Find the socket by session id.
@@ -232,9 +236,9 @@ Primacron.prototype.network = function network(address, port) {
  * @returns {Socket} The matching Primus spark.
  * @api private
  */
-Primacron.prototype.socket = function socket(session) {
+Primacron.readable('socket', function socket(session) {
   return this.sockets[session];
-};
+});
 
 /**
  * Add a new connection.
@@ -245,7 +249,7 @@ Primacron.prototype.socket = function socket(session) {
  * @param {Function} fn Optional callback.
  * @api private
  */
-Primacron.prototype.connect = function connect(account, session, id, fn) {
+Primacron.readable('connect', function connect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
     , value = this.uri +'@'+ id
     , primacron = this;
@@ -275,7 +279,7 @@ Primacron.prototype.connect = function connect(account, session, id, fn) {
   });
 
   return this;
-};
+});
 
 /**
  * Remove a connection.
@@ -286,7 +290,7 @@ Primacron.prototype.connect = function connect(account, session, id, fn) {
  * @param {Function} fn Optional callback.
  * @api private
  */
-Primacron.prototype.disconnect = function disconnect(account, session, id, fn) {
+Primacron.readable('disconnect', function disconnect(account, session, id, fn) {
   var key = this.namespace +'::'+ account +'::'+ session
     , value = this.uri +'@'+ id
     , primacron = this;
@@ -300,7 +304,7 @@ Primacron.prototype.disconnect = function disconnect(account, session, id, fn) {
   });
 
   return this;
-};
+});
 
 /**
  * Find a server for a given session id.
@@ -310,7 +314,7 @@ Primacron.prototype.disconnect = function disconnect(account, session, id, fn) {
  * @param {Function} fn Callback.
  * @api private
  */
-Primacron.prototype.find = function find(account, session, fn) {
+Primacron.readable('find', function find(account, session, fn) {
   var key = this.namespace +'::'+ account +'::'+ session;
 
   this.redis.get(key, function parse(err, data) {
@@ -324,7 +328,7 @@ Primacron.prototype.find = function find(account, session, fn) {
   });
 
   return this;
-};
+});
 
 /**
  * Send a message to the given id.
@@ -335,7 +339,7 @@ Primacron.prototype.find = function find(account, session, fn) {
  * @param {Function} fn Callback.
  * @api public
  */
-Primacron.prototype.forward = function forward(account, session, message, fn) {
+Primacron.readable('forward', function forward(account, session, message, fn) {
   var primacron = this;
 
   return this.find(account, session, function found(err, server, id) {
@@ -343,7 +347,7 @@ Primacron.prototype.forward = function forward(account, session, message, fn) {
 
     primacron.communicate(server, id, message, fn);
   });
-};
+});
 
 /**
  * Communicate with other servers.
@@ -354,7 +358,7 @@ Primacron.prototype.forward = function forward(account, session, message, fn) {
  * @param {Function} fn Callback
  * @api private
  */
-Primacron.prototype.communicate = function communicate(server, id, message, fn) {
+Primacron.readable('communicate', function communicate(server, id, message, fn) {
   request({
     uri: server + this.broadcast,
     method: 'PUT',
@@ -379,13 +383,15 @@ Primacron.prototype.communicate = function communicate(server, id, message, fn) 
     //
     fn(undefined, body);
   });
-};
+});
 
 /**
  * Pipe two different sockets.
  *
  * TODO: As we are following socket, we probably need to mark this socket as
  * `tail` as well..
+ * TODO: Maybe rename this to mirror as we're mirroring the activity on our
+ * connection which eases debug ability.
  *
  * @param {Socket} socket The socket that wants to follow an account.
  * @param {String} account Account id.
@@ -393,7 +399,7 @@ Primacron.prototype.communicate = function communicate(server, id, message, fn) 
  * @param {Function} fn Callback.
  * @api public
  */
-Primacron.prototype.pipe = function pipe(socket, account, session, fn) {
+Primacron.readable('pipe', function pipe(socket, account, session, fn) {
   fn = fn || noop;
 
   if (account !== socket.query.account) {
@@ -411,7 +417,7 @@ Primacron.prototype.pipe = function pipe(socket, account, session, fn) {
   });
 
   return this;
-};
+});
 
 /**
  * An other server wants to send something one of our connected sockets.
@@ -420,7 +426,7 @@ Primacron.prototype.pipe = function pipe(socket, account, session, fn) {
  * @param {Respone} res HTTP Response instance.
  * @api private
  */
-Primacron.prototype.incoming = function incoming(req, res) {
+Primacron.readable('incoming', function incoming(req, res) {
   var primus = this.primus
     , primacron = this
     , buff = '';
@@ -486,7 +492,7 @@ Primacron.prototype.incoming = function incoming(req, res) {
   });
 
   return this;
-};
+});
 
 /**
  * Require validation for every single message that passes in our message
@@ -496,7 +502,7 @@ Primacron.prototype.incoming = function incoming(req, res) {
  * @param {Function} validator The validation function.
  * @api public
  */
-Primacron.prototype.validate = function validate(event, validator) {
+Primacron.readable('validate', function validate(event, validator) {
   var callbackargument = validator.length - 1
     , primacron = this;
 
@@ -548,15 +554,15 @@ Primacron.prototype.validate = function validate(event, validator) {
 
     validator.apply(this, data);
   });
-};
+});
 
 /**
  * A new Primus connection.
  *
- * @param {Spark} spark The primus spark.
+ * @param {Spark} spark The Primus spark.
  * @api private
  */
-Primacron.prototype.connection = function connection(spark) {
+Primacron.readable('connection', function connection(spark) {
   var session = spark.query.session
     , account = spark.query.account
     , primacron = this
@@ -645,21 +651,7 @@ Primacron.prototype.connection = function connection(spark) {
     delete primacron.sockets[session];
     spark.removeAllListeners();
   });
-};
-
-/**
- * Proxy events from Engine.IO or the HTTP server directly to our Primacron
- * instance. This is done without throwing errors because we check beforehand if
- * there are listeners attached for the given event before we emit it.
- *
- * @param {String} event Name of the event we are emitting.
- * @api private
- */
-Primacron.prototype.proxy = function proxy(event) {
-  var listeners = this.listeners(event) || [];
-
-  if (listeners.length) this.emit.apply(this, arguments);
-};
+});
 
 /**
  * Return a default response for the given request.
@@ -669,7 +661,7 @@ Primacron.prototype.proxy = function proxy(event) {
  * @returns {Buffer} Pre compiled response buffer.
  * @api private
  */
-Primacron.prototype.end = function end(type, res) {
+Primacron.readable('end', function end(type, res) {
   var compiled = Primacron.prototype.end
     , msg = compiled[type] || compiled['bad request'];
 
@@ -680,7 +672,7 @@ Primacron.prototype.end = function end(type, res) {
   res.end(msg);
 
   return msg;
-};
+});
 
 //
 // Generate the default responses, they are stored in Buffers to reduce
@@ -721,9 +713,10 @@ Primacron.prototype.end = function end(type, res) {
 /**
  * Destroy the Primacron server and clean up all it's references.
  *
+ * @param {Function} fn Optional callback.
  * @api public
  */
-Primacron.prototype.destroy = function destroy(fn) {
+Primacron.readable('destroy', function destroy(fn) {
   var primacron = this;
 
   this.server.removeAllListeners('request');
@@ -736,7 +729,7 @@ Primacron.prototype.destroy = function destroy(fn) {
   });
 
   return this;
-};
+});
 
 /**
  * This argument accepts what ever you want to send to a regular server.listen
@@ -744,7 +737,7 @@ Primacron.prototype.destroy = function destroy(fn) {
  *
  * @api public
  */
-Primacron.prototype.listen = function listen() {
+Primacron.readable('listen', function listen() {
   var args = slice.call(arguments, 0)
     , port = +args[0];
 
@@ -754,9 +747,9 @@ Primacron.prototype.listen = function listen() {
   if (port) this.port = port;
 
   this.server = require('http').createServer(this.intercept.bind(this));
-  this.server.on('listening', this.proxy.bind(this, 'listening'));
-  this.server.on('error', this.proxy.bind(this, 'error'));
-  this.server.on('close', this.proxy.bind(this, 'close'));
+  this.server.on('listening', this.emits('listening'));
+  this.server.on('error', this.emits('error'));
+  this.server.on('close', this.emits('close'));
 
   //
   // Setup the real-time engine.
@@ -774,7 +767,7 @@ Primacron.prototype.listen = function listen() {
   //
   this.primus.transformer.service.onOpen = this.initialise.bind(this);
   this.primus.use('events', require('./plugins/events'));
-  this.primus.on('connection', this.connection.bind(this));
+  this.primus.on('connection', this.connection, this);
   this.primus.save(__dirname +'/dist/primacon.js');
 
   //
@@ -784,6 +777,9 @@ Primacron.prototype.listen = function listen() {
     this.primus[queued.method].apply(this.primus, queued.args);
   }, this);
 
+  //
+  // The queue has been processed so clear the queue.
+  //
   this.primusQueue.length = 0;
 
   //
@@ -792,24 +788,24 @@ Primacron.prototype.listen = function listen() {
   this.server.listen.apply(this.server, args);
 
   return this;
-};
+});
 
 //
 // Add missing methods of a regular HTTP server that we can proxy from our
 // internal `this.server` instance.
 //
 ['address'].forEach(function missing(method) {
-  Primacron.prototype[method] = function proxy() {
+  Primacron.readable(method, function proxy() {
     this.server[method].apply(this.server, arguments);
     return this;
-  };
+  });
 });
 
 //
 // Add missing methods of a Primus instance.
 //
 ['use', 'library', 'save', 'transform'].forEach(function missing(method) {
-  Primacron.prototype[method] = function proxy() {
+  Primacron.readable(method, function proxy() {
     //
     // Primus is only available after we've listened to the server, so we just
     // want to queue up all these arguments until we've actually listened.
@@ -821,7 +817,7 @@ Primacron.prototype.listen = function listen() {
 
     this.primus[method].apply(this.primus, arguments);
     return this;
-  };
+  });
 });
 
 /**
@@ -834,13 +830,6 @@ Primacron.prototype.listen = function listen() {
 Primacron.createServer = function createServer(redis, options) {
   return new Primacron(redis, options);
 };
-
-/**
- * Make the module extendable.
- *
- * @type {Function}
- */
-Primacron.extend = require('extendable');
 
 //
 // Expose the User object.

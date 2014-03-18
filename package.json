@@ -20,17 +20,17 @@
   "license": "MIT",
   "dependencies": {
     "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
-    "request": "2.21.x",
-    "async": "0.2.x",
-    "primus": "1.5.x",
-    "extendable": "0.0.x",
+    "request": "2.34.x",
+    "async": "2.0.x",
+    "primus": "2.0.x",
     "engine.io-client": "0.7.x",
-    "eventemitter3": "0.0.x"
+    "eventemitter3": "0.1.x",
+    "fusing": "0.0.x"
   },
   "devDependencies": {
-    "mocha": "1.10.x",
-    "chai": "1.6.x",
+    "mocha": "1.18.x",
+    "chai": "1.9.x",
     "pre-commit": "0.0.x",
-    "redis": "0.8.x"
+    "redis": "0.10.x"
   }
 }
