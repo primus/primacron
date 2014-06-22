@@ -4,7 +4,7 @@
   "description": "Primacron is a high level abstraction build on top of Primus",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_ENV=testing ./node_modules/.bin/mocha $(find test -name '*.test.js')"
+    "test": "mocha $(find test -name '*.test.js')"
   },
   "repository": {
     "type": "git",
@@ -19,18 +19,20 @@
   "author": "Arnout Kazemier <arnout@observe.it>",
   "license": "MIT",
   "dependencies": {
-    "engine.io": "git://github.com/3rd-Eden/engine.io.git#open-data",
-    "request": "2.34.x",
-    "async": "0.2.x",
+    "diagnostics": "0.0.x",
+    "fortress-maximus": "0.0.x",
+    "fusing": "0.0.x",
+    "metroplex": "0.0.x",
+    "mirage": "0.0.x",
+    "ms": "^0.6.2",
+    "omega-supreme": "0.0.x",
     "primus": "2.0.x",
-    "engine.io-client": "0.7.x",
-    "eventemitter3": "0.1.x",
-    "fusing": "0.0.x"
+    "primus-emit": "0.0.1",
+    "redis": "0.10.x"
   },
   "devDependencies": {
     "mocha": "1.18.x",
     "chai": "1.9.x",
-    "pre-commit": "0.0.x",
-    "redis": "0.10.x"
+    "pre-commit": "0.0.x"
   }
 }
