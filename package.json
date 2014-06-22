@@ -19,6 +19,7 @@
   "author": "Arnout Kazemier <arnout@observe.it>",
   "license": "MIT",
   "dependencies": {
+    "create-server": "0.0.x",
     "diagnostics": "0.0.x",
     "fortress-maximus": "0.0.x",
     "fusing": "0.0.x",
