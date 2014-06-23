@@ -2,8 +2,7 @@
 
 var Primus = require('primus')
   , fuse = require('fusing')
-  , path = require('path')
-  , ms = require('ms');
+  , path = require('path');
 
 /**
  *
@@ -14,7 +13,10 @@ var Primus = require('primus')
 function Primacron(server, options) {
   if (!(this instanceof Primacron)) return new Primacron(server, options);
 
-  this.fuse([this.createServer(server), this.configurable(options)]);
+  options = this.configurable(options);
+  server = this.createServer(server);
+
+  this.fuse([server, options]);
 
   this.use('fortress maximus', require('fortress-maximus'));
   this.use('omega supreme', require('omega-supreme'));

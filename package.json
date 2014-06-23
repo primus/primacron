@@ -22,18 +22,17 @@
     "create-server": "0.0.x",
     "diagnostics": "0.0.x",
     "fortress-maximus": "0.0.x",
-    "fusing": "0.0.x",
+    "fusing": "0.3.x",
     "metroplex": "0.0.x",
     "mirage": "0.0.x",
-    "ms": "^0.6.2",
     "omega-supreme": "0.0.x",
-    "primus": "2.0.x",
-    "primus-emit": "0.0.1",
+    "primus": "2.3.x",
+    "primus-emit": "0.0.x",
     "redis": "0.10.x"
   },
   "devDependencies": {
-    "mocha": "1.18.x",
-    "chai": "1.9.x",
+    "assume": "0.0.x",
+    "mocha": "1.20.x",
     "pre-commit": "0.0.x"
   }
 }
