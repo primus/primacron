@@ -16,7 +16,7 @@ function Primacron(server, options) {
   if (!(this instanceof Primacron)) return new Primacron(server, options);
 
   options = this.configurable(options || server);
-  server = this.createServer(server);
+  server = require('create-server')(this.merge(server, { listen: false }));
 
   this.fuse([server, options]);
 
@@ -52,12 +52,35 @@ Primacron.readable('configurable', function configurable(options) {
 });
 
 /**
- * Create a HTTP server for the given options.
+ * This argument accepts what ever you want to send to a regular server.listen
+ * method.
  *
- * @type {Function}
- * @api private
+ * @api public
  */
-Primacron.readable('createServer', require('create-server'));
+Primacron.readable('listen', function listen() {
+  //
+  // Proxy the events of the HTTP server to our own Primacron instance.
+  //
+  this.server.on('listening', this.emits('listening'));
+  this.server.on('error', this.emits('error'));
+  this.server.on('close', this.emits('close'));
+
+  //
+  // Proxy all arguments to the server.
+  //
+  this.server.listen.apply(this.server, arguments);
+});
+
+//
+// Add missing methods of a regular HTTP server that we can proxy from our
+// internal `this.server` instance.
+//
+['address'].forEach(function missing(method) {
+  Primacron.readable(method, function proxy() {
+    this.server[method].apply(this.server, arguments);
+    return this;
+  });
+});
 
 //
 // Expose the Server
