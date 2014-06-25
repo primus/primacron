@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/observing/primacron.git"
+    "url": "git://github.com/primus/primacron.git"
   },
   "keywords": [
     "Primacron",
@@ -16,7 +16,7 @@
     "Primus",
     "Scaling"
   ],
-  "author": "Arnout Kazemier <arnout@observe.it>",
+  "author": "Arnout Kazemier",
   "license": "MIT",
   "dependencies": {
     "create-server": "0.0.x",

@@ -8,7 +8,7 @@ theoretically scale indefinitly.
 
 # Primacron
 
-[![Build Status](https://travis-ci.org/observing/primacron.png)](https://travis-ci.org/observing/primacron)
+[![Build Status](https://travis-ci.org/primus/primacron.png)](https://travis-ci.org/primus/primacron)
 [![NPM version](https://badge.fury.io/js/primacron.png)](http://badge.fury.io/js/primacron)
 
 Primacron is an ancient scientist who's responsible for building Unicron, the
