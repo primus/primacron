@@ -5,7 +5,9 @@ var Primus = require('primus')
   , path = require('path');
 
 /**
+ * Create a new Primacron server.
  *
+ * @constructor
  * @param {Server} server HTTP server.
  * @param {Object} options Optional configuration.
  * @api private
@@ -13,7 +15,7 @@ var Primus = require('primus')
 function Primacron(server, options) {
   if (!(this instanceof Primacron)) return new Primacron(server, options);
 
-  options = this.configurable(options);
+  options = this.configurable(options || server);
   server = this.createServer(server);
 
   this.fuse([server, options]);
@@ -28,14 +30,14 @@ function Primacron(server, options) {
 fuse(Primacron, Primus);
 
 /**
- * Return a pre-configured configuration for primus.
+ * Return a pre-configured configuration for Primus.
  *
  * @param {Object} options Given optional options.
  * @returns {Object} Pre configured objects.
  * @api private
  */
 Primacron.readable('configurable', function configurable(options) {
-  options = options || {};
+  if ('object' !== typeof options) options = {};
 
   var pathname = options.pathname || '/primacron';
 
