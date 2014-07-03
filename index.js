@@ -50,14 +50,14 @@ Primacron.readable('configurable', function configurable(options) {
 
   var pathname = options.pathname || '/primacron';
 
-  return this.merge(options, {
-    transformer: 'engine.io',   // Engine.IO by default for cross browser support.
-    pathname: pathname,         // Use our own pathname.
-    parser: 'JSON',             // Default to JSON.
-
+  return this.merge({
     url: path.resolve(pathname, './omega/supreme'),
-    namespace: 'primacron'
-  });
+    transformer: 'engine.io',
+    namespace: 'primacron',
+    pathname: pathname,
+    fortress: 'primus',
+    parser: 'JSON'
+  }, options);
 });
 
 /**
@@ -86,7 +86,7 @@ Primacron.readable('listen', function listen() {
 // Add missing methods of a regular HTTP server that we can proxy from our
 // internal `this.server` instance.
 //
-['address'].forEach(function missing(method) {
+['address', 'getConnections'].forEach(function missing(method) {
   Primacron.readable(method, function proxy() {
     var res = this.server[method].apply(this.server, arguments);
 
