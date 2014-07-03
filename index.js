@@ -16,7 +16,9 @@ function Primacron(server, options) {
   if (!(this instanceof Primacron)) return new Primacron(server, options);
 
   options = this.configurable(options || server);
-  server = require('create-server')(this.merge(server, { listen: false }));
+  server = require('create-server')(server || options);
+
+  var listening = !!server.listeners('listening').length;
 
   this.fuse([server, options]);
 
@@ -25,6 +27,13 @@ function Primacron(server, options) {
   this.use('metroplex', require('metroplex'));
   this.use('emit', require('primus-emit'));
   this.use('mirage', require('mirage'));
+
+  //
+  // If the provided options tell the create-server to automatically start
+  // listening on the server we need to automatically call the .listen method so
+  // we can assign the correct listeners.
+  //
+  if (listening) this.listen();
 }
 
 fuse(Primacron, Primus);
@@ -58,6 +67,8 @@ Primacron.readable('configurable', function configurable(options) {
  * @api public
  */
 Primacron.readable('listen', function listen() {
+  var listening = !!this.server.listeners('listening').length;
+
   //
   // Proxy the events of the HTTP server to our own Primacron instance.
   //
@@ -66,9 +77,9 @@ Primacron.readable('listen', function listen() {
   this.server.on('close', this.emits('close'));
 
   //
-  // Proxy all arguments to the server.
+  // Proxy all arguments to the server if we're not already listening
   //
-  this.server.listen.apply(this.server, arguments);
+  if (!listening) this.server.listen.apply(this.server, arguments);
 });
 
 //
@@ -77,8 +88,15 @@ Primacron.readable('listen', function listen() {
 //
 ['address'].forEach(function missing(method) {
   Primacron.readable(method, function proxy() {
-    this.server[method].apply(this.server, arguments);
-    return this;
+    var res = this.server[method].apply(this.server, arguments);
+
+    //
+    // Figure out which kind of value we should return. If this was a chaining
+    // method on the server we should just return Primacron instead. If it's not
+    // the server that is returned we should return the value.
+    //
+    if (res === this.server) return this;
+    return res;
   });
 });
 
