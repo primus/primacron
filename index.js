@@ -24,8 +24,8 @@ function Primacron(server, options) {
 
   this.use('fortress maximus', require('fortress-maximus'));
   this.use('omega supreme', require('omega-supreme'));
+  this.use('emit', require('primus-emit/broadcast'));
   this.use('metroplex', require('metroplex'));
-  this.use('emit', require('primus-emit'));
   this.use('mirage', require('mirage'));
 
   //
