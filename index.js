@@ -1,6 +1,7 @@
 'use strict';
 
-var Primus = require('primus')
+var EventEmitter = require('events').EventEmitter
+  , Primus = require('primus')
   , fuse = require('fusing')
   , path = require('path');
 
@@ -16,7 +17,16 @@ function Primacron(server, options) {
   if (!(this instanceof Primacron)) return new Primacron(server, options);
 
   options = this.configurable(options || server);
-  server = require('create-server')(server || options);
+
+  //
+  // In Node, all servers inherit from the EventEmitter or net.Server. This is
+  // gives us a some what reliable check to see if we need to create a server.
+  // By allowing EventEmitters we can also compile client code without creating
+  // an actual HTTP server.
+  //
+  if (!(server instanceof EventEmitter)) {
+    server = require('create-server')(server || options);
+  }
 
   var listening = !!server.listeners('listening').length;
 
@@ -33,7 +43,9 @@ function Primacron(server, options) {
   // listening on the server we need to automatically call the .listen method so
   // we can assign the correct listeners.
   //
-  if (listening) this.listen();
+  if (listening) {
+    this.listen();
+  }
 }
 
 fuse(Primacron, Primus);
@@ -79,7 +91,9 @@ Primacron.readable('listen', function listen() {
   //
   // Proxy all arguments to the server if we're not already listening
   //
-  if (!listening) this.server.listen.apply(this.server, arguments);
+  if (!listening && this.server.listen) {
+    this.server.listen.apply(this.server, arguments);
+  }
 });
 
 //
@@ -99,6 +113,18 @@ Primacron.readable('listen', function listen() {
     return res;
   });
 });
+
+/**
+ * Create a client.
+ *
+ * @returns {Primacron} client
+ * @api private
+ */
+Primacron.client = function client() {
+  var primacron = new Primacron(new EventEmitter(), {});
+
+  return primacron.Socket;
+};
 
 //
 // Expose the Server
