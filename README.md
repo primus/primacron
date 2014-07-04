@@ -12,13 +12,13 @@ emitted.
 This high level interface is composed out of various Primus plugins that are
 maintained by the Primus project:
 
-- [metroplex](https://github.com/primus/metroplex) Which is the spark registry.
-- [omega-supreme](https://github.com/primus/omega-supreme) Adds HTTP based
+- *[metroplex](https://github.com/primus/metroplex)* Which is the spark registry.
+- *[omega-supreme](https://github.com/primus/omega-supreme)* Adds HTTP based
   broadcasting/messaging between servers.
-- [fortess-maximus](https://github.com/primus/fortress-maximus) Force validation
+- *[fortess-maximus](https://github.com/primus/fortress-maximus)* Force validation
   for every single incoming message.
-- [primus-emit](https://github.com/primus/emit) Emitting for client and server.
-- [mirage](https://github.com/primus/mirage) Persistent session ids.
+- *[primus-emit](https://github.com/primus/emit)* Emitting for client and server.
+- *[mirage](https://github.com/primus/mirage)* Persistent session ids.
 
 The module depends on `redis` as a socket address -> server IP dictionary which
 is shared between the various of connected servers. If you do not have `redis`
