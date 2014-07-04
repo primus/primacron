@@ -68,6 +68,7 @@ Primacron.readable('configurable', function configurable(options) {
     namespace: 'primacron',
     pathname: pathname,
     fortress: 'primus',
+    concurrently: 10,
     parser: 'JSON'
   }, options);
 });
