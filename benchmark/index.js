@@ -1,5 +1,11 @@
 'use strict';
 
+//
+// Bump max-sockets to something more sane.
+//
+require('https').globalAgent.maxSockets =
+ require('http').globalAgent.maxSockets = Infinity;
+
 var Primacron = require('primacron')
   , argv = require('argh').argv
   , fs = require('fs');

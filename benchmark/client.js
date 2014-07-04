@@ -1,5 +1,11 @@
 'use strict';
 
+//
+// Bump max-sockets to something more sane.
+//
+require('https').globalAgent.maxSockets =
+ require('http').globalAgent.maxSockets = Infinity;
+
 var Primacron = require('primacron')
   , argv = require('argh').argv
   , async = require('async');
@@ -29,7 +35,11 @@ async.mapLimit(
       client.received++;
     });
 
-    client.on('open', function open() {
+    client.on('concurrent', function (nr) {
+      client.received++;
+    });
+
+    client.once('open', function open() {
       next(undefined, client);
 
       var timer = setInterval(function () {
@@ -45,10 +55,14 @@ async.mapLimit(
   function complete(err, clients) {
     console.log('connected', clients.length, 'clients');
 
-    clients.forEach(function (client) {
-      client.on('concurrent', function (nr) {
-        console.log('receiving concurrent', nr);
+    setInterval(function () {
+      var total = 0;
+
+      clients.forEach(function (client) {
+        total += client.received;
       });
-    });
+
+      console.log('received a total of ', total, 'messages');
+    }, 10000);
   }
 );
