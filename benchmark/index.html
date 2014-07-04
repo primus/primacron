@@ -1,0 +1,8 @@
+<script src="/primacron/primus.js"></script>
+<script>
+  var primus = new Primus();
+
+  primus.on('concurrent', function (concurrent) {
+    console.log('concurrent connections', concurrent);
+  });
+</script>
