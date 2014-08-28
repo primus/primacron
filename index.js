@@ -43,7 +43,7 @@ function Primacron(server, options) {
   // listening on the server we need to automatically call the .listen method so
   // we can assign the correct listeners.
   //
-  if (listening) {
+  if (!listening && false !== this.options.listen) {
     this.listen();
   }
 }
@@ -80,8 +80,6 @@ Primacron.readable('configurable', function configurable(options) {
  * @api public
  */
 Primacron.readable('listen', function listen() {
-  var listening = !!this.server.listeners('listening').length;
-
   //
   // Proxy the events of the HTTP server to our own Primacron instance.
   //
@@ -92,7 +90,7 @@ Primacron.readable('listen', function listen() {
   //
   // Proxy all arguments to the server if we're not already listening
   //
-  if (!listening && this.server.listen) {
+  if (this.server.listen) {
     this.server.listen.apply(this.server, arguments);
   }
 });
