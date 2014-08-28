@@ -44,7 +44,9 @@ describe('Primacron', function () {
         port: ++portnumbers
       });
 
-      prima.once('close', done);
+      prima.once('close', function () {
+        done(); // cannot be passed directly due to provided options.
+      });
       prima.once('listening', function () {
         prima.destroy();
       });
