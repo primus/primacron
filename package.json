@@ -21,8 +21,8 @@
   "dependencies": {
     "create-server": "0.0.x",
     "diagnostics": "0.0.x",
-    "engine.io": "1.3.x",
-    "engine.io-client": "1.3.x",
+    "engine.io": "1.4.x",
+    "engine.io-client": "1.4.x",
     "fortress-maximus": "0.0.x",
     "fusing": "0.3.x",
     "metroplex": "0.0.x",
@@ -30,7 +30,7 @@
     "omega-supreme": "0.0.x",
     "primus": "2.4.x",
     "primus-emit": "0.1.x",
-    "redis": "0.10.x"
+    "redis": "0.12.x"
   },
   "devDependencies": {
     "assume": "0.0.x",
