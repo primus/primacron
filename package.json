@@ -1,6 +1,6 @@
 {
   "name": "primacron",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Primacron is a high level abstraction build on top of Primus",
   "main": "index.js",
   "scripts": {
@@ -28,7 +28,7 @@
     "metroplex": "0.0.x",
     "mirage": "0.0.x",
     "omega-supreme": "0.0.x",
-    "primus": "2.4.x",
+    "primus": "git://github.com/primus/primus#eb1036c3b186395ef394f8b561c114ebcecf7784",
     "primus-emit": "0.1.x",
     "redis": "0.12.x"
   },
