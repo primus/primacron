@@ -25,10 +25,10 @@ function Primacron(server, options) {
   // an actual HTTP server.
   //
   if (!(server instanceof EventEmitter)) {
-    server = require('create-server')(server || options);
+    server = require('create-server')(this.merge(server || options, {
+      listen: false // Force false by default as WE want to do the listening manually
+    }));
   }
-
-  var listening = !!server.listeners('listening').length;
 
   this.fuse([server, options]);
 
@@ -43,8 +43,8 @@ function Primacron(server, options) {
   // listening on the server we need to automatically call the .listen method so
   // we can assign the correct listeners.
   //
-  if (!listening && false !== this.options.listen) {
-    this.listen();
+  if (false !== this.options.listen) {
+    this.listen(this.options.port || 443);
   }
 }
 
@@ -83,9 +83,8 @@ Primacron.readable('listen', function listen() {
   //
   // Proxy the events of the HTTP server to our own Primacron instance.
   //
-  this.server.on('listening', this.emits('listening'));
+  this.server.once('listening', this.emits('listening'));
   this.server.on('error', this.emits('error'));
-  this.server.on('close', this.emits('close'));
 
   //
   // Proxy all arguments to the server if we're not already listening
