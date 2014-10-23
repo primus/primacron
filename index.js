@@ -32,11 +32,22 @@ function Primacron(server, options) {
 
   this.fuse([server, options]);
 
+  //
+  // The order of middleware usage is important here.
+  //
+  // 1. Mirage buffers requests if there isn't a valid id or if an id is still
+  //    generating so it doesn't process the data without an id.
+  // 2. Fortess needs to validate the all incoming messages and should come
+  //    before other modules that re-emit.
+  // 3. Supreme, doesn't really matter, but it should come before Metroplex.
+  // 4. Emit, honey badger don't care.
+  // 5. Metroplex, just do cluster management.
+  //
+  this.use('mirage', require('mirage'));
   this.use('fortress maximus', require('fortress-maximus'));
   this.use('omega supreme', require('omega-supreme'));
   this.use('emit', require('primus-emit/broadcast'));
   this.use('metroplex', require('metroplex'));
-  this.use('mirage', require('mirage'));
 
   //
   // If the provided options tell the create-server to automatically start
