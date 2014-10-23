@@ -1,6 +1,6 @@
 {
   "name": "primacron",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Primacron is a high level abstraction build on top of Primus",
   "main": "index.js",
   "scripts": {
@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "assume": "0.0.x",
-    "mocha": "1.21.x",
+    "mocha": "2.0.x",
     "pre-commit": "0.0.x"
   }
 }
