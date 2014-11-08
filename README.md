@@ -1,5 +1,7 @@
 # Primacron
 
+[![Version npm](http://img.shields.io/npm/v/primacron.svg?style=flat-square)](http://browsenpm.org/package/primacron)[![Build Status](http://img.shields.io/travis/primus/primacron/master.svg?style=flat-square)](https://travis-ci.org/primus/primacron)[![Dependencies](https://img.shields.io/david/primus/primacron.svg?style=flat-square)](https://david-dm.org/primus/primacron)[![Coverage Status](http://img.shields.io/coveralls/primus/primacron/master.svg?style=flat-square)](https://coveralls.io/r/primus/primacron?branch=master)[![IRC channel](http://img.shields.io/badge/IRC-irc.freenode.net%23primus-00a8ff.svg?style=flat-square)](http://webchat.freenode.net/?channels=primus)
+
 Primacron is an ancient scientist who's responsible for building Unicron, the
 evil twin of Primus.
 
