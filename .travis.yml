@@ -1,11 +1,14 @@
+sudo: false
 language: node_js
 node_js:
-  - "0.8"
+  - "4"
+  - "3"
+  - "2"
+  - "1"
+  - "0.12"
   - "0.10"
-
 services: redis-server
-
 notifications:
-  irc: "irc.freenode.org#observing"
+  irc: "irc.freenode.org#primus"
   on_success: change
   on_failure: change
