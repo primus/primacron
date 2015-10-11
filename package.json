@@ -19,22 +19,21 @@
   "author": "Arnout Kazemier",
   "license": "MIT",
   "dependencies": {
-    "create-server": "0.0.x",
-    "diagnostics": "0.0.x",
-    "engine.io": "1.4.x",
-    "engine.io-client": "1.4.x",
+    "create-server": "1.0.x",
+    "diagnostics": "1.0.x",
+    "engine.io": "1.5.x",
+    "engine.io-client": "1.5.x",
     "fortress-maximus": "0.0.x",
-    "fusing": "0.4.x",
+    "fusing": "1.0.x",
     "metroplex": "0.0.x",
     "mirage": "0.0.x",
     "omega-supreme": "0.0.x",
-    "primus": ">=2.4.6",
-    "primus-emit": "0.1.x",
-    "redis": "0.12.x"
+    "primus": "4.0.x",
+    "primus-emit": "0.1.x"
   },
   "devDependencies": {
-    "assume": "0.0.x",
-    "mocha": "2.0.x",
-    "pre-commit": "0.0.x"
+    "assume": "1.3.x",
+    "mocha": "2.3.x",
+    "pre-commit": "1.1.x"
   }
 }
