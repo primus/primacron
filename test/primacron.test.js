@@ -4,8 +4,7 @@ describe('Primacron', function () {
   var Primacron = require('../')
     , assume = require('assume')
     , portnumbers = 1024
-    , server
-    , reds;
+    , server;
 
   beforeEach(function beforeEach(done) {
     server = new Primacron({
@@ -18,16 +17,15 @@ describe('Primacron', function () {
     server.destroy(done);
   });
 
-  describe("#listen", function () {
+  describe('#listen', function () {
     it('should register a listening event on the consumed server that re-emits', function (done) {
-       var prima = new Primacron({
-        listen: false,
-        port: ++portnumbers
+      var prima = new Primacron({
+        port: ++portnumbers,
+        listen: false
       });
 
-      prima.once('listening', function () {
-        prima.destroy();
-        done();
+      prima.on('listening', function () {
+        prima.destroy(done);
       });
 
       prima.listen();
@@ -40,23 +38,20 @@ describe('Primacron', function () {
 
     it('should register a close event on the consumed server that re-emits', function (done) {
       var prima = new Primacron({
-        listen: false,
-        port: ++portnumbers
+        port: ++portnumbers,
+        listen: false
       });
 
-      prima.once('close', function () {
+      prima.on('close', function () {
         done(); // cannot be passed directly due to provided options.
       });
-      prima.once('listening', function () {
+      prima.on('listening', function () {
         prima.destroy();
       });
 
       prima.listen();
       assume(prima.server._events).to.have.property('close');
-      assume(prima.server._events.close).to.be.an('array');
-      prima.server._events.close.forEach(function (fn) {
-        assume(fn).to.be.a('function');
-      });
+      assume(prima.server._events.close).to.be.a('function');
     });
   });
 });
