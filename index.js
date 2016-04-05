@@ -75,7 +75,7 @@ Primacron.readable('configurable', function configurable(options) {
 
   return this.merge({
     url: path.resolve(pathname, './omega/supreme'),
-    transformer: 'engine.io',
+    transformer: 'websockets',
     namespace: 'primacron',
     pathname: pathname,
     fortress: 'primus',
