@@ -1,6 +1,6 @@
 'use strict';
 
-var EventEmitter = require('events').EventEmitter
+var EventEmitter = require('events')
   , Primus = require('primus')
   , fuse = require('fusing')
   , path = require('path');
@@ -43,11 +43,11 @@ function Primacron(server, options) {
   // 4. Emit, honey badger don't care.
   // 5. Metroplex, just do cluster management.
   //
-  this.use('mirage', require('mirage'));
-  this.use('fortress maximus', require('fortress-maximus'));
-  this.use('omega supreme', require('omega-supreme'));
-  this.use('emit', require('primus-emit/broadcast'));
-  this.use('metroplex', require('metroplex'));
+  this.plugin('mirage', require('mirage'));
+  this.plugin('fortress maximus', require('fortress-maximus'));
+  this.plugin('omega supreme', require('omega-supreme'));
+  this.plugin('emit', require('primus-emit/broadcast'));
+  this.plugin('metroplex', require('metroplex'));
 
   //
   // If the provided options tell the create-server to automatically start
