@@ -1,13 +1,7 @@
 'use strict';
 
-//
-// Bump max-sockets to something more sane.
-//
-require('https').globalAgent.maxSockets =
- require('http').globalAgent.maxSockets = Infinity;
-
-var Primacron = require('primacron')
-  , argv = require('argh').argv
+var argv = require('argh').argv
+  , Primacron = require('..')
   , fs = require('fs');
 
 //
@@ -18,15 +12,8 @@ var primacron = new Primacron({
     res.setHeader('Content-Type', 'text/html');
     fs.createReadStream(__dirname +'/index.html').pipe(res);
   },
-  redis: require('redis').createClient(),
   port: +argv.port || 8080
 });
-
-//
-// Store the client library in the directory which is a pre-configured Primus
-// instance.
-//
-primacron.save(__dirname +'/primacron.js');
 
 //
 // Add a validator for incoming ping messages. This allows us to ensure that
@@ -53,7 +40,7 @@ primacron.on('invalid', function invalid(err) {
 });
 
 //
-// if the process is the leader of the stack it will start broadcasting the
+// If the process is the leader of the stack it will start broadcasting the
 // concurrency to every connected client.
 //
 if (argv.leader) setTimeout(function connections() {

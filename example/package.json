@@ -22,8 +22,6 @@
   "homepage": "https://github.com/primus/primacron",
   "dependencies": {
     "argh": "0.1.x",
-    "async": "0.9.x",
-    "primacron": "git://github.com/primus/primacron",
-    "redis": "0.10.x"
+    "async": "2.0.x"
   }
 }
