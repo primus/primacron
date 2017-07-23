@@ -26,7 +26,7 @@
     "metroplex": "~1.0.0",
     "mirage": "~0.0.6",
     "omega-supreme": "~2.1.0",
-    "primus": "~7.0.0",
+    "primus": "~7.1.0",
     "primus-emit": "~1.0.0",
     "ws": "~3.0.0"
   },
