@@ -2,26 +2,31 @@ describe('Primacron', function () {
   'use strict';
 
   var Primacron = require('../')
-    , assume = require('assume')
-    , portnumbers = 1024
-    , server;
+    , Redis = require('ioredis')
+    , assume = require('assume');
 
-  beforeEach(function beforeEach(done) {
-    server = new Primacron({
-      port: ++portnumbers,
-      listening: done
-    });
+  var portnumbers = 1024
+    , redis;
+
+  before(function (done) {
+    redis = new Redis();
+    redis.on('connect', done);
   });
 
-  afterEach(function afterEach(done) {
-    server.destroy(done);
+  after(function () {
+    return redis.quit();
+  });
+
+  afterEach(function () {
+    return redis.flushdb();
   });
 
   describe('#listen', function () {
     it('should register a listening event on the consumed server that re-emits', function (done) {
       var prima = new Primacron({
         port: ++portnumbers,
-        listen: false
+        listen: false,
+        redis
       });
 
       prima.on('listening', function () {
@@ -39,7 +44,8 @@ describe('Primacron', function () {
     it('should register a close event on the consumed server that re-emits', function (done) {
       var prima = new Primacron({
         port: ++portnumbers,
-        listen: false
+        listen: false,
+        redis
       });
 
       prima.on('close', function () {
