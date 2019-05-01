@@ -20,7 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "create-server": "~1.0.1",
-    "diagnostics": "~1.1.0",
+    "diagnostics": "~2.0.0",
     "fortress-maximus": "~0.0.5",
     "fusing": "~1.0.0",
     "metroplex": "~1.0.0",
