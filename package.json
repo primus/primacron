@@ -33,7 +33,7 @@
   "devDependencies": {
     "assume": "~2.2.0",
     "ioredis": "~4.17.0",
-    "mocha": "~7.1.0",
+    "mocha": "~7.2.0",
     "pre-commit": "~1.2.0"
   }
 }
