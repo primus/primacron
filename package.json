@@ -28,7 +28,7 @@
     "omega-supreme": "~3.0.0",
     "primus": "~7.3.0",
     "primus-emit": "~1.0.0",
-    "ws": "~7.3.0"
+    "ws": "~7.4.1"
   },
   "devDependencies": {
     "assume": "~2.3.0",
